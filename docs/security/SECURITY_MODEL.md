@@ -60,3 +60,8 @@ Owner wajib memeriksa harga, ketersediaan, jadwal, delivery fee, serta transaksi
 4. Uji checkout menggunakan browser profile terpisah dari sesi owner.
 5. Uji pembatasan dokumen dan status dengan UID guest berbeda.
 6. Jangan memasukkan transaksi nyata sebelum smoke test staging selesai.
+
+
+## Dependency audit gate (14 November 2026)
+
+CI currently passes TypeScript and Vite build on Node 24.12, but `npm audit` reports four high-severity package entries: `firebase@13.2.0`, `@firebase/firestore@4.19.1`, `@firebase/firestore-compat@0.4.17`, and transitive `@grpc/grpc-js@1.9.16`. The Firestore SDK pins the Node gRPC transport to `~1.9.0`; the upstream tracking issue is documented in `docs/security/DEPENDENCY_AUDIT_2026-11-14.md`. This app uses the browser Firebase SDK, where Node gRPC is not loaded by the browser runtime, but the install tree is still not audit-clean. Do not force a Firebase major downgrade. Resolve/accept this item before introducing Node-side Firebase Admin, Functions, gRPC server capabilities, or claiming a clean dependency audit.

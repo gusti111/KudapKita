@@ -166,7 +166,7 @@ Jangan menjalankan deployment dari lingkungan ini sebelum project ID, akun, data
 - Tidak ada rate limiter/anti-spam kuat tanpa server tepercaya.
 - Jangan memasukkan data transaksi riil sebelum Rules, backup, dan akses diuji.
 
-## 8. Dokumen proyek
+## 8. Dependency audit\n\nCI typecheck dan build berhasil pada branch pengembangan. Namun, `npm audit` masih melaporkan empat entri high pada rantai Firebase/Firestore dan `@grpc/grpc-js`. Lihat `docs/security/DEPENDENCY_AUDIT_2026-11-14.md`. Saran downgrade besar dari npm tidak diterapkan tanpa uji kompatibilitas.\n\n## 9. Dokumen proyek
 
 - `docs/architecture/` — arsitektur, role, dan route.
 - `docs/database/FIRESTORE_SCHEMA.md` — koleksi dan snapshot transaksi.

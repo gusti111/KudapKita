@@ -19,7 +19,7 @@
 
 ## Application QA
 - [ ] `npm run typecheck` passes.
-- [ ] `npm run build` passes.
+- [ ] `npm run build` passes.\n- [ ] Review/resolve the open four-high npm audit finding in `DEPENDENCY_AUDIT_2026-11-14.md`; do not run `npm audit fix --force` as an unreviewed shortcut.
 - [ ] Test storefront at 320, 393, 768, 1024, and 1440 CSS px.
 - [ ] Test screen reader names, keyboard focus, form labels, empty/loading/error states.
 - [ ] Test guest checkout in a separate browser profile from owner login.
