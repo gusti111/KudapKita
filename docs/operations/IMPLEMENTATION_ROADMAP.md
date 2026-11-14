@@ -1,48 +1,55 @@
-# Implementation Roadmap
+# Implementation Roadmap — KudapKita
 
-## Phase 0 — Project and security foundation
-- Confirm Firebase project ID and environment variables.
-- Enable Email/Password and Anonymous sign-in.
-- Create owner profile manually.
-- Deploy and test Firestore Rules.
-- Validate public catalog projection.
+## Phase 0 — Foundation
+- [x] React, TypeScript, Vite, Tailwind and Firebase scaffold.
+- [x] Customer / owner route separation.
+- [x] Owner authentication and manually provisioned role profile.
+- [x] Guest checkout identity through Anonymous Authentication.
+- [ ] Firebase staging project setup and rules deployment test.
 
-## Phase 1 — Storefront MVP
-- Final brand identity and actual product photos (static assets under `apps/web/public/images/products/` for Spark MVP).
-- Product catalog, product details, category filters and search.
-- Browser-local cart.
-- Guest checkout and order request creation.
-- WhatsApp click-to-chat with order reference.
-- Guest own-order tracking.
+## Phase 1 — Customer storefront
+- [x] Brand-first responsive home page and catalog route.
+- [x] Published product query, search, category filtering.
+- [x] Browser-local cart and quantity updates.
+- [x] Guest checkout with pickup/delivery and customer notes.
+- [x] Customer order request and own-session tracking.
+- [x] WhatsApp handoff using owner public setting with environment fallback.
+- [ ] Final product photos, approved copy, contact details, and price data.
 
 ## Phase 2 — Owner order operations
-- Owner login and role guard.
-- Order inbox and detail view.
-- Confirm availability and final total.
-- Manual payment status verification.
-- Order production/fulfillment statuses.
-- Customer-facing tracking projection.
+- [x] Dashboard and owner order inbox.
+- [x] Owner quote and confirmed total.
+- [x] Manual payment verification with append-only payment record.
+- [x] Order state machine and status badges.
+- [x] Stock deduction when paid order enters preparation.
+- [ ] Proof attachment flow (requires secure file storage/backend; out of Spark MVP scope).
 
 ## Phase 3 — Catalog and stock
-- Private product CRUD and public catalog projection.
-- Category CRUD.
-- Finished-goods inventory.
-- Stock movement history.
-- Production capacity and pre-order configuration.
+- [x] Private product CRUD and public projection.
+- [x] HPP stays private and is not copied into public projection.
+- [x] Category creation.
+- [x] Finished-goods inventory balance.
+- [x] Production run and stock movement history.
+- [x] Inventory adjustment with required reason.
+- [ ] Raw-material recipe, ingredient inventory, and automatic HPP calculation.
 
-## Phase 4 — Offline sales and reports
-- Direct sale entry.
-- Separate online/offline channels.
-- Revenue based on verified payments.
-- Date filters and downloadable summaries.
+## Phase 4 — Direct sales and reporting
+- [x] Direct sale entry.
+- [x] Stock deduction and movement in same Firestore transaction.
+- [x] Separate online / direct revenue channels.
+- [x] Revenue counts only verified payment records.
+- [ ] Date-range reports, downloadable CSV/PDF, margin/HPP and product ranking.
 
 ## Phase 5 — Hardening and launch
-- Rules emulator tests for each role.
-- Mobile/tablet/desktop UX test.
-- Firestore query/index review.
-- Accessibility review.
-- Error and abuse monitoring.
-- Backup/export and operational handover.
-- Firebase Hosting deployment.
+- [x] Deny-by-default Firestore Rules baseline.
+- [x] Order transition restrictions and append-only payment/stock/production/direct-sale records.
+- [x] Empty, loading, error, and success states on operational screens.
+- [x] Responsive owner navigation and storefront.
+- [ ] TypeScript CI pass on development pull request.
+- [ ] Firebase Rules Emulator suite and query-index verification.
+- [ ] Cross-device UI/accessibility test (keyboard, contrast, mobile viewport).
+- [ ] Firebase staging smoke test and backup/restore verification.
+- [ ] Real product photos and owner-approved business data.
+- [ ] Final sign-off and production deploy.
 
-Do not start Phase 3 or 4 by adding placeholder screens alone. Implement data model, authorization, validation, loading/empty/error states, and tests together.
+Status markers reflect code included in the branch, not successful deployment or production verification.

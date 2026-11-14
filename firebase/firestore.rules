@@ -53,6 +53,63 @@ service cloud.firestore {
         && (items.size() < 6 || validOrderItem(items[5]));
     }
 
+    function validOwnerOrderUpdate() {
+      let changed = request.resource.data.diff(resource.data).affectedKeys();
+      return changed.hasOnly([
+        'confirmedTotal', 'orderStatus', 'quoteConfirmedAt', 'updatedAt',
+        'paymentStatus', 'paymentMethod', 'paymentVerifiedAt'
+      ])
+      && request.resource.data.updatedAt == request.time
+      && (
+        (
+          resource.data.orderStatus == 'REQUESTED'
+          && request.resource.data.orderStatus == 'WAITING_PAYMENT'
+          && request.resource.data.paymentStatus == 'UNPAID'
+          && request.resource.data.confirmedTotal is int
+          && request.resource.data.confirmedTotal > 0
+          && request.resource.data.quoteConfirmedAt == request.time
+          && changed.hasAll(['confirmedTotal', 'orderStatus', 'quoteConfirmedAt', 'updatedAt'])
+        )
+        ||
+        (
+          resource.data.orderStatus == 'WAITING_PAYMENT'
+          && resource.data.paymentStatus == 'UNPAID'
+          && request.resource.data.orderStatus == resource.data.orderStatus
+          && request.resource.data.paymentStatus == 'PAID'
+          && request.resource.data.paymentMethod in ['BANK_TRANSFER', 'QRIS']
+          && request.resource.data.paymentVerifiedAt == request.time
+          && request.resource.data.confirmedTotal == resource.data.confirmedTotal
+          && changed.hasAll(['paymentStatus', 'paymentMethod', 'paymentVerifiedAt', 'updatedAt'])
+        )
+        ||
+        (
+          request.resource.data.paymentStatus == resource.data.paymentStatus
+          && (
+            (resource.data.orderStatus == 'REQUESTED'
+              && request.resource.data.orderStatus in ['REJECTED', 'CANCELLED'])
+            ||
+            (resource.data.orderStatus == 'WAITING_PAYMENT'
+              && request.resource.data.orderStatus in ['REJECTED', 'CANCELLED'])
+            ||
+            (resource.data.orderStatus == 'WAITING_PAYMENT'
+              && resource.data.paymentStatus == 'PAID'
+              && request.resource.data.orderStatus == 'PREPARING')
+            ||
+            (resource.data.orderStatus == 'PREPARING'
+              && (
+                (resource.data.fulfillmentMethod == 'PICKUP' && request.resource.data.orderStatus == 'READY_FOR_PICKUP')
+                ||
+                (resource.data.fulfillmentMethod == 'DELIVERY' && request.resource.data.orderStatus == 'OUT_FOR_DELIVERY')
+              ))
+            ||
+            (resource.data.orderStatus in ['READY_FOR_PICKUP', 'OUT_FOR_DELIVERY']
+              && request.resource.data.orderStatus == 'COMPLETED')
+          )
+          && changed.hasOnly(['orderStatus', 'updatedAt'])
+        )
+      );
+    }
+
     match /userProfiles/{uid} {
       allow get: if isOwner() || (signedIn() && request.auth.uid == uid);
       allow list: if isOwner();
@@ -77,11 +134,13 @@ service cloud.firestore {
     }
 
     match /products/{productId} {
-      allow read, write: if isOwner();
+      allow read, create, update: if isOwner();
+      allow delete: if false;
     }
 
     match /categories/{categoryId} {
-      allow read, write: if isOwner();
+      allow read, create, update: if isOwner();
+      allow delete: if false;
     }
 
     match /orders/{orderId} {
@@ -114,7 +173,8 @@ service cloud.firestore {
 
       allow get: if isOwner() || (signedIn() && resource.data.createdByUid == request.auth.uid);
       allow list: if isOwner();
-      allow update, delete: if isOwner();
+      allow update: if isOwner() && validOwnerOrderUpdate();
+      allow delete: if false;
     }
 
     match /orderPrivate/{orderId} {
@@ -122,19 +182,85 @@ service cloud.firestore {
     }
 
     match /payments/{paymentId} {
-      allow read, write: if isOwner();
+      allow read: if isOwner();
+      allow create: if isOwner()
+        && request.resource.data.keys().hasOnly([
+          'orderId', 'amount', 'method', 'status', 'verifiedByUid', 'verifiedAt'
+        ])
+        && request.resource.data.keys().hasAll([
+          'orderId', 'amount', 'method', 'status', 'verifiedByUid', 'verifiedAt'
+        ])
+        && request.resource.data.orderId is string
+        && request.resource.data.amount is int
+        && request.resource.data.amount > 0
+        && request.resource.data.method in ['BANK_TRANSFER', 'QRIS']
+        && request.resource.data.status == 'VERIFIED'
+        && request.resource.data.verifiedByUid == request.auth.uid
+        && request.resource.data.verifiedAt == request.time;
+      allow update, delete: if false;
     }
 
     match /inventory/{productId} {
-      allow read, write: if isOwner();
+      allow read, create, update: if isOwner();
+      allow delete: if false;
     }
 
     match /stockMovements/{movementId} {
-      allow read, write: if isOwner();
+      allow read: if isOwner();
+      allow create: if isOwner()
+        && request.resource.data.keys().hasOnly([
+          'productId', 'productName', 'type', 'quantity', 'beforeQty',
+          'afterQty', 'referenceId', 'reason', 'createdAt'
+        ])
+        && request.resource.data.keys().hasAll([
+          'productId', 'productName', 'type', 'quantity',
+          'beforeQty', 'afterQty', 'createdAt'
+        ])
+        && request.resource.data.quantity is int
+        && request.resource.data.quantity != 0
+        && request.resource.data.beforeQty is int
+        && request.resource.data.afterQty is int
+        && request.resource.data.afterQty >= 0
+        && request.resource.data.createdAt == request.time;
+      allow update, delete: if false;
+    }
+
+    match /productionRuns/{runId} {
+      allow read: if isOwner();
+      allow create: if isOwner()
+        && request.resource.data.keys().hasOnly([
+          'productId', 'productName', 'quantity', 'unit', 'note',
+          'status', 'stockMovementId', 'createdAt'
+        ])
+        && request.resource.data.keys().hasAll([
+          'productId', 'productName', 'quantity', 'unit',
+          'status', 'stockMovementId', 'createdAt'
+        ])
+        && request.resource.data.quantity is int
+        && request.resource.data.quantity > 0
+        && request.resource.data.status == 'COMPLETED'
+        && request.resource.data.createdAt == request.time;
+      allow update, delete: if false;
     }
 
     match /directSales/{saleId} {
-      allow read, write: if isOwner();
+      allow read: if isOwner();
+      allow create: if isOwner()
+        && request.resource.data.keys().hasOnly([
+          'channel', 'items', 'total', 'paymentMethod', 'paymentStatus', 'note', 'createdAt'
+        ])
+        && request.resource.data.keys().hasAll([
+          'channel', 'items', 'total', 'paymentMethod', 'paymentStatus', 'createdAt'
+        ])
+        && request.resource.data.channel == 'DIRECT'
+        && request.resource.data.items is list
+        && request.resource.data.items.size() > 0
+        && request.resource.data.total is int
+        && request.resource.data.total > 0
+        && request.resource.data.paymentMethod in ['CASH', 'BANK_TRANSFER', 'QRIS']
+        && request.resource.data.paymentStatus == 'VERIFIED'
+        && request.resource.data.createdAt == request.time;
+      allow update, delete: if false;
     }
 
     match /privateSettings/{documentId} {
@@ -142,7 +268,9 @@ service cloud.firestore {
     }
 
     match /activityLogs/{logId} {
-      allow read, write: if isOwner();
+      allow read: if isOwner();
+      allow create: if isOwner();
+      allow update, delete: if false;
     }
 
     // Deny by default for every collection not explicitly listed above.

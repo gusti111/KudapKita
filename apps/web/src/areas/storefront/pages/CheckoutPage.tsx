@@ -8,6 +8,7 @@ import { buildWhatsAppUrl } from '@/shared/utils/format';
 import { PrimaryButton } from '@/shared/components/ui/PrimaryButton';
 import { Notice } from '@/shared/components/feedback/Notice';
 import { getErrorMessage } from '@/shared/utils/errors';
+import { getStorefrontPublicSettings } from '@/data/repositories/catalog.repository';
 import { useAuth } from '@/app/providers/AuthProvider';
 
 export function CheckoutPage() {
@@ -34,7 +35,16 @@ export function CheckoutPage() {
       setCreatedId(id);
       clearCart();
       const text = `Halo KudapKita, saya mengirim permintaan pesanan ${id}. Nama: ${name}. Mohon konfirmasi ketersediaan, total akhir, dan instruksi pembayaran.`;
-      const waUrl = buildWhatsAppUrl(import.meta.env.VITE_PUBLIC_WHATSAPP_NUMBER ?? '', text);
+      let waNumber = import.meta.env.VITE_PUBLIC_WHATSAPP_NUMBER ?? '';
+      try {
+        const publicSettings = await getStorefrontPublicSettings();
+        if (typeof publicSettings.whatsappNumber === 'string' && publicSettings.whatsappNumber.trim()) {
+          waNumber = publicSettings.whatsappNumber;
+        }
+      } catch {
+        // A settings read failure must not undo a successfully-created order.
+      }
+      const waUrl = buildWhatsAppUrl(waNumber, text);
       setWhatsAppUrl(waUrl);
     } catch (submitError) {
       setError(getErrorMessage(submitError, 'Pesanan belum berhasil disimpan.'));

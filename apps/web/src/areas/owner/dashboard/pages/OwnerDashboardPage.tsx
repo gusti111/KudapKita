@@ -2,19 +2,32 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { ArrowUpRight, ClipboardList, Package, Wallet } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { getRecentOwnerOrders } from '@/data/repositories/orders.repository';
+import { getVerifiedSalesSummary } from '@/data/repositories/owner-operations.repository';
+import { formatRupiah } from '@/shared/utils/format';
 import type { OrderRecord } from '@/domain/entities/Order';
 import { OrderStatusBadge } from '@/shared/components/ui/StatusBadge';
 import { LoadingScreen } from '@/shared/components/feedback/LoadingScreen';
 import { Notice } from '@/shared/components/feedback/Notice';
 
 export function OwnerDashboardPage() {
-  const [orders, setOrders] = useState<OrderRecord[]>([]); const [loading, setLoading] = useState(true); const [error, setError] = useState('');
-  useEffect(() => { getRecentOwnerOrders().then(setOrders).catch(() => setError('Data pesanan belum dapat dimuat. Periksa konfigurasi dan Security Rules.')).finally(() => setLoading(false)); }, []);
+  const [orders, setOrders] = useState<OrderRecord[]>([]);
+  const [revenue, setRevenue] = useState<number | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  useEffect(() => {
+    Promise.all([getRecentOwnerOrders(), getVerifiedSalesSummary()])
+      .then(([nextOrders, summary]) => {
+        setOrders(nextOrders);
+        setRevenue(summary.onlineRevenue + summary.directRevenue);
+      })
+      .catch(() => setError('Data dashboard belum dapat dimuat. Periksa konfigurasi dan Security Rules.'))
+      .finally(() => setLoading(false));
+  }, []);
   const requested = orders.filter((order) => order.orderStatus === 'REQUESTED').length;
   const active = orders.filter((order) => ['WAITING_PAYMENT','PREPARING','READY_FOR_PICKUP','OUT_FOR_DELIVERY'].includes(order.orderStatus)).length;
   return <div><div className="flex flex-wrap items-end justify-between gap-4"><div><span className="text-xs font-bold uppercase tracking-[.18em] text-terracotta">Overview</span><h1 className="mt-2 font-serif text-3xl font-bold text-cocoa">Dashboard</h1><p className="mt-1 text-sm text-muted">Ringkasan operasional KudapKita.</p></div><Link to="/owner/pesanan" className="inline-flex items-center gap-2 rounded-xl bg-cocoa px-4 py-2.5 text-sm font-semibold text-white">Kelola pesanan <ArrowUpRight size={16}/></Link></div>
   {error && <div className="mt-5"><Notice tone="error">{error}</Notice></div>}
-  <div className="mt-7 grid gap-4 sm:grid-cols-2 xl:grid-cols-4"><MetricCard title="Total permintaan" value={loading ? '—' : String(orders.length)} icon={<ClipboardList size={18}/>} detail="Seluruh kanal online"/><MetricCard title="Perlu diperiksa" value={loading ? '—' : String(requested)} icon={<Wallet size={18}/>} detail="Permintaan baru"/><MetricCard title="Dalam proses" value={loading ? '—' : String(active)} icon={<Package size={18}/>} detail="Menunggu penyelesaian"/><MetricCard title="Penjualan terverifikasi" value="—" icon={<Wallet size={18}/>} detail="Modul laporan belum aktif"/></div>
+  <div className="mt-7 grid gap-4 sm:grid-cols-2 xl:grid-cols-4"><MetricCard title="Permintaan terbaru" value={loading ? '—' : String(orders.length)} icon={<ClipboardList size={18}/>} detail="Maksimal 100 pesanan terbaru"/><MetricCard title="Perlu diperiksa" value={loading ? '—' : String(requested)} icon={<Wallet size={18}/>} detail="Dalam 100 pesanan terbaru"/><MetricCard title="Dalam proses" value={loading ? '—' : String(active)} icon={<Package size={18}/>} detail="Menunggu penyelesaian"/><MetricCard title="Pendapatan terverifikasi" value={loading ? '—' : revenue === null ? '—' : formatRupiah(revenue)} icon={<Wallet size={18}/>} detail="Akumulasi online + langsung"/></div>
   <section className="mt-7 rounded-2xl border border-stroke bg-white"><div className="flex items-center justify-between border-b border-stroke px-5 py-4"><div><h2 className="font-semibold text-cocoa">Pesanan terbaru</h2><p className="mt-1 text-xs text-muted">Daftar transaksi yang perlu dipantau.</p></div><Link to="/owner/pesanan" className="text-xs font-semibold text-terracotta">Lihat semua</Link></div>{loading ? <LoadingScreen/> : orders.length === 0 ? <div className="p-10 text-center text-sm text-muted">Belum ada pesanan. Pesanan pelanggan akan muncul di sini setelah Firebase aktif.</div> : <div className="divide-y divide-stroke">{orders.slice(0,6).map((order) => <div key={order.id} className="flex flex-wrap items-center justify-between gap-3 px-5 py-4"><div><div className="font-mono text-xs font-semibold text-cocoa">{order.id.slice(0,12)}…</div><div className="mt-1 text-sm">{order.customerName}</div><div className="mt-1 text-xs text-muted">{order.items.length} jenis produk · {order.fulfillmentMethod === 'PICKUP' ? 'Ambil sendiri' : 'Pengantaran'}</div></div><OrderStatusBadge status={order.orderStatus}/></div>)}</div>}</section>
   <div className="mt-6"><Notice tone="info">Dashboard ini menampilkan data Firestore jika konfigurasi telah tersedia. Total omzet belum dihitung dari permintaan pesanan; pendapatan hanya boleh direkap setelah pembayaran terverifikasi.</Notice></div></div>;
 }

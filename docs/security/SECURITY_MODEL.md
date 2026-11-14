@@ -1,45 +1,62 @@
-# Security Model and Spark MVP Boundaries
+# Security Model — KudapKita MVP
 
-## Required configuration
+## Identitas dan peran
 
-1. Enable Email/Password authentication for owner.
-2. Enable Anonymous authentication for guest checkout.
-3. Provision the first owner in Firebase Authentication and create `userProfiles/{uid}` manually.
-4. Deploy `firebase/firestore.rules` before exposing the site.
-5. Test allow/deny cases with Rules Playground or Firebase Emulator Suite.
+- Visitor tidak perlu login untuk membaca katalog yang dipublikasikan.
+- Customer memakai Firebase Anonymous Authentication ketika mengirim checkout.
+- Owner memakai Email/Password dan wajib memiliki `userProfiles/{uid}` dengan `role: owner` serta `isActive: true`.
+- Dokumen profile/role owner dibuat manual melalui Firebase Console, bukan dari browser.
+- Akses operasional hanya owner pada MVP. Role cashier/manager belum diaktifkan.
 
 ## Access matrix
 
 | Resource | Visitor | Guest customer | Owner |
 |---|---:|---:|---:|
-| Published `publicProducts` | Read | Read | Read/write |
-| Internal `products` | Deny | Deny | Read/write |
-| `orders` create | Deny | Create own initial request | Read/write all |
-| `orders` get | Deny | Read own UID only | Read/write all |
-| `orders` list | Deny | Deny | Read/write all |
-| `orderPrivate` | Deny | Deny | Read/write |
-| `payments` | Deny | Deny | Read/write |
-| `inventory` and `stockMovements` | Deny | Deny | Read/write |
-| `directSales` | Deny | Deny | Read/write |
+| `publicProducts` published | Read | Read | Read/write |
+| `publicCategories` active | Read | Read | Read/write |
+| `publicSettings/storefront` | Get | Get | Read/write |
+| `products`, `categories` | Deny | Deny | Read/write, soft archive |
+| `orders` create | Deny | Initial request only | Read |
+| `orders` get | Deny | Own UID only | Read |
+| `orders` list | Deny | Deny | Read |
+| `orders` update | Deny | Deny | State transitions only |
+| `payments` | Deny | Deny | Create verified record, read |
+| `inventory` | Deny | Deny | Read/create/update |
+| `stockMovements`, `productionRuns` | Deny | Deny | Read/create, append-only |
+| `directSales` | Deny | Deny | Read/create, append-only |
 | `privateSettings` | Deny | Deny | Read/write |
+| `activityLogs` | Deny | Deny | Read/create |
 
-## Important safeguards
+## Guardrails
 
-- Public documents must contain only public-safe values.
-- Owner role is not writable from the client.
-- Customer cannot update/delete an order after submission.
-- Customer cannot choose initial order/payment states other than `REQUESTED`/`UNPAID`.
-- Customer order documents are tied to `createdByUid`.
-- Public catalog queries must filter for `isPublished == true` (or active category) because Firestore Rules are not post-query filters.
-- Never deploy permissive wildcard rules such as `allow read, write: if true`.
+- Deny-by-default untuk koleksi yang tidak disebutkan.
+- Public projection adalah whitelist eksplisit; HPP tidak boleh ada pada `publicProducts`.
+- Customer hanya dapat membuat status awal `REQUESTED` + `UNPAID`, dengan `createdByUid` sama dengan UID anonim.
+- Customer tidak dapat melakukan list order, mengubah status, atau membaca pesanan milik UID lain.
+- Owner order update dibatasi pada konfirmasi total, verifikasi pembayaran, dan transisi state yang diizinkan.
+- Payments dan histori stock/production/direct sales tidak dapat diubah atau dihapus melalui Rules setelah dibuat.
+- Route guard React hanyalah UX. Firestore Rules tetap menjadi batas otorisasi server.
+- Jangan gunakan wildcard permissive seperti `allow read, write: if true`.
 
-## What Spark MVP does not provide
+## Keterbatasan penting tanpa trusted backend
 
-- No trusted server function for price calculation or stock transactions.
-- No secure file upload through Firebase Storage under the chosen no-cost plan constraint.
-- No payment gateway or webhook.
-- No scheduled cancellation/expiry automation.
-- No robust anti-spam rate limiter for guest order creation.
-- No tamper-proof audit log: owner-side browser writes can be edited by an owner. It is an operational log, not a compliance ledger.
+KudapKita MVP tidak memakai Cloud Functions. Operasi stok dan pencatatan transaksi dijalankan melalui Firestore transactions dari klien owner. Ini memberi atomicity untuk alur aplikasi yang benar, tetapi tidak melindungi dari owner yang sengaja menulis nilai lain melalui SDK/Console. Client-side state machine dan Firestore Rules mengurangi risiko perubahan biasa, namun belum setara backend tepercaya.
 
-Owner must manually validate order line items, price, product availability, delivery charge, and payment receipt through the actual bank/merchant channel. The rules validate each requested product against its published public catalog document; the owner still confirms the final total. Consider a trusted backend and billing review before adding automatic payments, inventory reservation, or user-uploaded files.
+Tidak tersedia:
+- payment gateway / webhook;
+- unggah bukti pembayaran pelanggan ke Firebase Storage;
+- idempotency dan anti-spam backend;
+- jadwal pembatalan order otomatis;
+- audit log tamper-proof;
+- multi-role staff.
+
+Owner wajib memeriksa harga, ketersediaan, jadwal, delivery fee, serta transaksi aktual secara manual. Sebelum otomatisasi pembayaran, reservasi stok multi-customer, atau operasi staf, evaluasi Cloud Functions/Cloud Run dan billing terpisah.
+
+## Deployment prerequisites
+
+1. Verifikasi Firebase project ID dan backup data.
+2. Deploy Rules dan indexes hanya setelah Rules Emulator/Rules Playground lulus.
+3. Buat dan uji akun owner aktif.
+4. Uji checkout menggunakan browser profile terpisah dari sesi owner.
+5. Uji pembatasan dokumen dan status dengan UID guest berbeda.
+6. Jangan memasukkan transaksi nyata sebelum smoke test staging selesai.

@@ -1,4 +1,4 @@
-import { collection, getDocs, orderBy, query, where } from 'firebase/firestore';
+import { collection, doc, getDoc, getDocs, orderBy, query, where } from 'firebase/firestore';
 import { db, isFirebaseConfigured } from '@/infrastructure/firebase/client';
 import { DEMO_PRODUCTS } from '@/data/fixtures/demo-products';
 import type { PublicProduct } from '@/domain/entities/Product';
@@ -14,4 +14,10 @@ export async function getPublishedProducts(): Promise<PublicProduct[]> {
   );
   const snapshot = await getDocs(productsQuery);
   return snapshot.docs.map((item) => ({ id: item.id, ...item.data() }) as PublicProduct);
+}
+
+export async function getStorefrontPublicSettings(): Promise<Record<string, unknown>> {
+  if (!db || !isFirebaseConfigured) return {};
+  const snapshot = await getDoc(doc(db, 'publicSettings', 'storefront'));
+  return snapshot.exists() ? snapshot.data() : {};
 }
