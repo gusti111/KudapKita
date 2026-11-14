@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, NavLink, Outlet } from 'react-router-dom';
-import { ShoppingBag, Menu as MenuIcon, Instagram } from 'lucide-react';
+import { ShoppingBag, Menu as MenuIcon, Camera } from 'lucide-react';
 import { useCart } from '@/app/providers/CartProvider';
 import { BRAND } from '@/shared/constants/brand';
 import { getStorefrontPublicSettings } from '@/data/repositories/catalog.repository';
@@ -52,7 +52,7 @@ export function StorefrontLayout() {
       <div className="mx-auto grid max-w-7xl gap-8 px-4 py-12 sm:px-6 md:grid-cols-3 lg:px-8">
         <div><div className="font-serif text-2xl font-bold">KudapKita</div><p className="mt-3 max-w-xs text-sm leading-6 text-white/70">{storeTagline} Pilihan camilan rumahan untuk menemani aktivitasmu.</p></div>
         <div><div className="font-semibold">Jelajahi</div><div className="mt-3 grid gap-2 text-sm text-white/70"><Link to="/menu">Katalog produk</Link><Link to="/keranjang">Keranjang</Link><Link to="/owner/login">Akses owner</Link></div></div>
-        <div><div className="font-semibold">Terhubung</div><p className="mt-3 text-sm text-white/70">Hubungi kami untuk ketersediaan, jadwal, dan konfirmasi pesanan.</p>{whatsappHref ? <a href={whatsappHref} target="_blank" rel="noreferrer" className="mt-3 inline-flex min-h-11 items-center gap-2 rounded-xl bg-white/10 px-3 text-sm text-white hover:bg-white/20">WhatsApp KudapKita</a> : <p className="mt-3 text-xs text-white/55">Nomor WhatsApp belum diatur.</p>}{storeInfo.instagramHandle && <div className="mt-3 flex items-center gap-2 text-sm text-white/70"><Instagram size={16}/> {storeInfo.instagramHandle}</div>}</div>
+        <div><div className="font-semibold">Terhubung</div><p className="mt-3 text-sm text-white/70">Hubungi kami untuk ketersediaan, jadwal, dan konfirmasi pesanan.</p>{whatsappHref ? <a href={whatsappHref} target="_blank" rel="noreferrer" className="mt-3 inline-flex min-h-11 items-center gap-2 rounded-xl bg-white/10 px-3 text-sm text-white hover:bg-white/20">WhatsApp KudapKita</a> : <p className="mt-3 text-xs text-white/55">Nomor WhatsApp belum diatur.</p>}{storeInfo.instagramHandle && <div className="mt-3 flex items-center gap-2 text-sm text-white/70"><Camera size={16}/> {storeInfo.instagramHandle}</div>}</div>
       </div>
       <div className="border-t border-white/10 px-4 py-4 text-center text-xs text-white/50">© {new Date().getFullYear()} {storeName}.</div>
     </footer>

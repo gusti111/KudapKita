@@ -1,6 +1,6 @@
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { signOut } from 'firebase/auth';
-import { BarChart3, Boxes, ClipboardList, Coffee, CreditCard, LayoutDashboard, LogOut, Package, Settings, ShoppingBasket, Tags } from 'lucide-react';
+import { BarChart3, Boxes, ClipboardList, Coffee, LayoutDashboard, LogOut, Package, Settings, ShoppingBasket, Tags } from 'lucide-react';
 import { auth } from '@/infrastructure/firebase/client';
 import { useAuth } from '@/app/providers/AuthProvider';
 

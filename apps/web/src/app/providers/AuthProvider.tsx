@@ -20,12 +20,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(isFirebaseConfigured);
 
   useEffect(() => {
-    if (!auth || !db) {
+    const firebaseAuth = auth;
+    const firestore = db;
+    if (!firebaseAuth || !firestore) {
       setLoading(false);
       return;
     }
 
-    return onAuthStateChanged(auth, async (user) => {
+    return onAuthStateChanged(firebaseAuth, async (user) => {
       setLoading(true);
       setCurrentUser(user);
       setProfile(null);
@@ -34,7 +36,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return;
       }
       try {
-        const snapshot = await getDoc(doc(db, 'userProfiles', user.uid));
+        const snapshot = await getDoc(doc(firestore, 'userProfiles', user.uid));
         if (snapshot.exists()) setProfile(snapshot.data() as UserProfile);
       } catch (error) {
         console.error('Unable to load user profile:', error);
