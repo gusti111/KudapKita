@@ -11,8 +11,12 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 24
           cache: npm
       - run: npm install
+      - name: Report dependency audit summary
+        run: |
+          npm audit --json > npm-audit.json || true
+          node -e "const r=require('./npm-audit.json'); console.log('Dependency audit:', JSON.stringify(r.metadata?.vulnerabilities ?? {})); for (const [name,v] of Object.entries(r.vulnerabilities ?? {})) console.log(name + ' | ' + v.severity + ' | direct=' + v.isDirect + ' | range=' + v.range + ' | fix=' + JSON.stringify(v.fixAvailable));"
       - run: npm run typecheck
       - run: npm run build

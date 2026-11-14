@@ -29,7 +29,7 @@ Tidak ada registrasi owner publik. Akun owner dibuat di Firebase Authentication,
 
 ## 3. Menjalankan aplikasi
 
-Persyaratan: Node.js 22.12+ dan npm.
+Persyaratan: Node.js 24.12+ dan npm.
 
 ```bash
 npm install

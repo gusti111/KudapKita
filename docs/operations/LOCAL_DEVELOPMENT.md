@@ -2,6 +2,8 @@
 
 ## Install
 
+Use Node.js 24.12 or newer (matches the Firebase packages resolved by the project).
+
 ```bash
 npm install
 cp .env.example .env.local
