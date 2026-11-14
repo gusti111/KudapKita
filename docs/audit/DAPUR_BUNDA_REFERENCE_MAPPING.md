@@ -1,62 +1,53 @@
 # Dapur Bunda Reference Mapping — KudapKita
 
-This document distinguishes **what was observed in Dapur Bunda's audit/source** from **how KudapKita adapts it**. KudapKita remains a customer-facing snack ordering platform plus owner workspace; it is not a clone of the Dapur Bunda POS application.
+The uploaded archive `Dapur Bunda.zip` was reviewed as the source reference. This is a mapping of concrete principles from its audit/release documents; KudapKita is not a clone of the Dapur Bunda POS.
 
-## 1. Reference material reviewed
+## Source documents inspected
 
-The supplied Dapur Bunda archive includes:
 - `docs/audit/04-data-model-audit.md`
 - `docs/audit/05-business-logic-audit.md`
 - `docs/audit/06-security-audit.md`
-- `docs/audit/07-ui-ux-audit.md`
-- `docs/audit/08-mobile-desktop-audit.md`
-- `docs/audit/09-qr-device-pairing-blueprint.md`
-- `docs/audit/10-v2-feature-priority.md`
-- `docs/audit/12-final-recommendation.md`
-- `docs/FINAL_RELEASE.md` / `docs/final-audit/`
-- `README.md`
+- `docs/release/phase1-callable-contract.md`
+- `docs/release/phase1-firestore-rules-review.md`
+- `docs/release/phase1-security-review.md`
+- `docs/PHASE_B_FAST_SYNC_TRUSTED_BACKEND.md`
+- `docs/FINAL_RELEASE.md`
 
-The source's release status explicitly warns that passing local static/unit checks does not prove live Firebase Rules, Functions, hosting, or real-device smoke tests are deployed and working. KudapKita adopts the same release discipline.
+## Reference findings and KudapKita decisions
 
-## 2. Decisions mapped to KudapKita
+| Dapur Bunda source finding/principle | KudapKita adaptation |
+|---|---|
+| `orders.items[]` snapshots menu identity, selling price and HPP for historical reporting (`04-data-model-audit.md`). | KudapKita snapshots product identity and quantity; owner sets confirmed total. HPP stays private and is not copied into public projection. |
+| `stock_movements` records signed quantity, before/after balances, reference and reason. | `stockMovements` records signed deltas, before/after stock, operation type and reference. |
+| Client-only order state transitions were marked HIGH risk because DevTools could bypass stock deduction/restoration (`05-business-logic-audit.md`). | Order transitions move to callable Functions; browser clients cannot write order records directly. |
+| Dapur Bunda Phase B uses trusted Callable Functions, server-side role lookup, Firestore transactions and retry guards. | KudapKita uses Firebase Functions v2 in `asia-southeast2`, checks active owner profile server-side, and uses deterministic operation IDs plus request fingerprints. |
+| The Phase 1 callable contract documents input validation, transaction and idempotency behavior per operation. | KudapKita provides an explicit callable contract in `docs/operations/CALLABLE_CONTRACT.md` and domain tests for request validation, totals and state transitions. |
+| Firestore Rules use default-deny and deny sensitive direct client writes; Admin SDK callables perform trusted mutation (`phase1-firestore-rules-review.md`). | Rules deny client create/update/delete for orders, payments, inventory, stock movements, production runs and direct sales. |
+| Public customer catalogue must not expose internal recipe/HPP data (`FINAL_RELEASE.md`). | Separate `publicProducts` projection from private `products`; public writes use an explicit field whitelist. |
+| Dapur Bunda distinguishes local/unit tests from Emulator and production deployment proof. | CI runs domain tests and Rules Emulator tests; Firebase staging and production remain separate owner-approved steps. |
 
-| Dapur Bunda finding/principle | KudapKita adaptation | Status / boundary |
-|---|---|---|
-| Order item snapshot preserves transaction context | Each order keeps product ID, display name, quantity, and displayed price snapshot; owner confirms the final total | Implemented at request/quote level |
-| Separate payment state from order state | `orderStatus` and `paymentStatus` remain separate; payment record is written only after owner verification | Implemented |
-| State machine must reject invalid transitions | Firestore Rules constrain owner order status updates; repository validates transition before write | Implemented in source; Emulator verification still required |
-| Stock movement needs before/after balances and a reference | `stockMovements` stores quantity delta, before/after quantity, type, and optional reference | Implemented for production, adjustment, direct sale, and online preparation |
-| Stock deduction must be atomic and idempotent | Firestore transaction reads balance and commits inventory + movement + order status together | Atomic within app transaction; no trusted backend / strict server idempotency |
-| Avoid stale/ambiguous business metrics | Reports count only verified payment records and direct transactions | Implemented as lifetime aggregate; not period-filtered |
-| RBAC must be enforced by Rules, not only hidden UI | Owner route guard plus Firestore Rules check active owner profile | Implemented; role limited to owner in MVP |
-| Public catalog must not expose internal HPP/recipe data | Internal `products` and public `publicProducts` are separate documents with an explicit whitelist | Implemented |
-| Empty, loading, error, and success states should be consistent | Owner operation pages use shared loading, notice, panel, and empty-state patterns | Implemented in source |
-| Avoid native alert/confirm for critical workflow | Shared confirmation dialog is used for product archive and payment verification | Implemented for these owner actions |
-| Dashboard needs semantic metrics | Pending, active order and verified-payment figures are distinct; no invented values | Partially implemented; dashboard revenue tile still needs live summary integration |
+## What is intentionally not transferred
 
-## 3. Deliberate differences from Dapur Bunda
+KudapKita's current business need is a public snack storefront and an owner-operated order flow. The following Dapur Bunda POS features are intentionally outside this MVP:
 
-Dapur Bunda is an operational warung system with POS, cashier-oriented workflow, recipe/HPP calculation, raw-material stock, and device/mobile pairing concepts. KudapKita's current project needs a guest storefront and an owner-managed order flow.
+- Cashier/manager/warehouse RBAC and device pairing.
+- Recipe-based raw-material stock consumption and fractional quantities.
+- Automatic HPP from recipe ingredients, purchase records and supplier workflows.
+- POS cash/change handling and QR payment reconciliation.
+- Refund lifecycle, payment gateway, dynamic QRIS and external accounting integration.
+- Desktop Electron packaging.
 
-Therefore this MVP does **not** implement:
-- POS/cashier role or multi-role RBAC.
-- Raw-material stock, recipe consumption, fractional units, supplier purchasing, or automated HPP from recipes.
-- QR device pairing or restricted mobile staff sessions.
-- Electron desktop packaging.
-- Payment gateway, dynamic QRIS, webhook, refund engine, or upload of proof of transfer.
-- A tamper-proof audit trail or trusted backend function layer.
+## Business constraints preserved
 
-## 4. Business safeguards carried forward
+1. Customer checkout creates a request; it is not revenue.
+2. Customer-provided product labels and prices are not trusted by the backend.
+3. Payment verification is a manual owner action after reconciliation against the real bank/merchant transaction.
+4. A paid online order deducts finished-goods stock only when it enters preparation.
+5. Stock shortage fails the entire transaction; no partial stock deduction.
+6. Production adds inventory only after completed production is recorded.
+7. Direct sales calculate prices from the server product catalogue and atomically update sale + stock + movement.
+8. No fabricated prices, HPP, photos, stock quantities, payment accounts or contact details.
 
-1. Requests are not revenue.
-2. WhatsApp messages are not payment verification.
-3. Online order stock is not deducted at request creation; it is deducted when the owner starts preparation after payment verification.
-4. A shortage prevents a stock deduction transaction from committing.
-5. Direct sales reduce stock and create a movement in the same transaction.
-6. Production increases finished-goods stock only after the owner records completed output.
-7. HPP, internal bank information, and private notes are not projected to the public storefront.
-8. No claim of production-ready status until Rules, build, Firebase staging, and real-device smoke tests pass.
+## Release status
 
-## 5. Release warning
-
-The code branch is an implementation candidate, not a deployed application. Firebase project configuration, owner account, real catalog values, product photos, Rules Emulator tests, and smoke tests remain release gates. Do not deploy to a Firebase project belonging to Dapur Bunda or any other reference business.
+The mapping does not mean KudapKita has been deployed. Passing CI/Emulator tests is still distinct from testing Functions and Rules against the owner's staging Firebase project.

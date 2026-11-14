@@ -1,54 +1,52 @@
-# Firestore Rules Test Matrix — Release Gate
+# Firestore Rules Test Matrix — KudapKita
 
-This table describes expected behavior. It is not proof that Firebase Emulator tests have run. Every case must be verified against a staging Firebase project or Emulator Suite before deployment.
+This matrix describes client permissions after the trusted-backend migration. It is a test plan until the CI Firestore Emulator job reports a passing result.
 
 | Actor | Action | Expected | Reason |
 |---|---|---:|---|
-| Signed-out visitor | Read published `publicProducts` query with `isPublished == true` | Allow | Public catalog |
-| Signed-out visitor | Read unpublished product | Deny | Unpublished |
-| Signed-out visitor | Read internal `products` or HPP | Deny | Internal business data |
-| Signed-out visitor | Get `publicSettings/storefront` | Allow | Public brand/contact projection |
-| Signed-out visitor | Get `privateSettings/business` | Deny | Bank/address private data |
-| Anonymous customer A | Create valid request from published items | Allow | Guest checkout |
-| Anonymous customer A | Create request with forged name/price/product ID | Deny | Must match public projection |
-| Anonymous customer A | Create request in `PAID` or `PREPARING` state | Deny | Customer cannot self-approve |
-| Anonymous customer A | Get own order | Allow | Exact UID ownership |
-| Anonymous customer A | Get customer B order | Deny | UID mismatch |
-| Anonymous customer A | List orders, update own order, delete own order | Deny | No enumeration or client transition |
-| Owner without active profile | Read/write owner data | Deny | Profile/role guard |
-| Owner with active profile | Read/write product and category records | Allow | Owner-only CRUD |
-| Owner with active profile | Publish product with public projection | Allow | Owner controls catalog |
-| Owner with active profile | Update order REQUESTED → WAITING_PAYMENT with positive integer total | Allow | Quote transition |
-| Owner with active profile | Update order REQUESTED → PAID or COMPLETED | Deny | Invalid state transition |
-| Owner with active profile | Mark payment WAITING_PAYMENT/UNPAID → PAID with method + server timestamps | Allow | Manual verification |
-| Owner with active profile | Mark payment PAID before quote exists | Deny | Quote required |
-| Owner with active profile | Move paid order WAITING_PAYMENT → PREPARING | Allow | Valid transition |
-| Owner with active profile | Move unpaid order to PREPARING | Deny | Payment not verified |
-| Owner with active profile | Move PREPARING pickup order → READY_FOR_PICKUP | Allow | Fulfillment transition |
-| Owner with active profile | Move PREPARING pickup order → OUT_FOR_DELIVERY | Deny | Mismatched fulfillment |
-| Owner with active profile | Change COMPLETED order | Deny | Terminal state |
-| Owner with active profile | Create production run with positive quantity | Allow | Production history |
-| Owner with active profile | Update/delete stock movement or production run | Deny | Append-only history |
-| Owner with active profile | Create direct sale with valid positive total/payment status | Allow | Direct sale record |
-| Owner with active profile | Update/delete direct sale or payment record | Deny | Transaction history |
-| Owner client | Create/update/delete userProfiles role | Deny | Manual provisioning |
+| Visitor | Read published `publicProducts` | Allow | Public catalogue |
+| Visitor | Read unpublished `publicProducts` | Deny | Unpublished record |
+| Visitor | Read `products` including HPP | Deny | Internal data |
+| Visitor | Get `publicSettings/storefront` | Allow | Public store contact |
+| Visitor | Read `privateSettings/business` | Deny | Bank/address privacy |
+| Anonymous customer A | Get an order created by UID A | Allow | Own session |
+| Anonymous customer A | Get an order created by UID B | Deny | Prevent IDOR |
+| Anonymous customer A | List all orders | Deny | No order enumeration |
+| Anonymous customer A | Create/update/delete order directly | Deny | Callable-only order writes |
+| Owner without active profile | Read owner data | Deny | Owner profile guard |
+| Active owner | Read/write private products and categories | Allow | Catalogue management |
+| Active owner | Write safe public product/category projection | Allow | Published catalogue management |
+| Active owner | Add HPP or private bank field to public projection | Deny | Data minimization |
+| Active owner browser | Create/update/delete order directly | Deny | Trusted-backend only |
+| Active owner browser | Create/update/delete payment directly | Deny | Trusted-backend only |
+| Active owner browser | Create/update/delete inventory directly | Deny | Trusted-backend only |
+| Active owner browser | Create/update/delete stock movement directly | Deny | Trusted-backend only |
+| Active owner browser | Create/update/delete production run directly | Deny | Trusted-backend only |
+| Active owner browser | Create/update/delete direct sale directly | Deny | Trusted-backend only |
+| Active owner | Read order/payment/stock/production/sale records | Allow | Operational UI reads |
+| Inactive owner | Read owner operational collections | Deny | Disabled profile |
 
-## Required end-to-end tests
+## Callable-level tests required
 
-- [ ] Test public product query and public category query against Rules.
-- [ ] Test one order with one item and one order with six different items.
-- [ ] Test anonymous customer A cannot read customer B's order.
-- [ ] Test customer cannot update or delete an order.
-- [ ] Test quote transition and invalid direct state jumps.
-- [ ] Test payment verification and duplicate verification.
-- [ ] Test unpaid order cannot move into PREPARING.
-- [ ] Test insufficient stock prevents online order preparation and does not partially deduct stock.
-- [ ] Test production run and inventory balance commit together.
-- [ ] Test direct sale, stock deduction, and stock movement commit together.
-- [ ] Test order completion transitions for pickup and delivery.
-- [ ] Test public projection does not expose HPP, bank details, or private settings.
-- [ ] Check index availability, quota, auth session behavior, and browser refresh on guest tracking.
+Callable authorization is checked from Firebase Authentication and the server-side `userProfiles/{uid}` record. Firestore Rules tests do not replace callable tests.
+
+- [ ] Anonymous customer can create a valid request containing active published products.
+- [ ] Unauthenticated caller cannot create a request.
+- [ ] Authenticated non-owner cannot call owner-only functions.
+- [ ] Customer-supplied product name and price are ignored; server reads canonical product data.
+- [ ] Reusing the same clientRequestId + same payload returns the original order/result.
+- [ ] Reusing the same clientRequestId with a different payload returns already-exists.
+- [ ] Quote only applies to REQUESTED + UNPAID order.
+- [ ] Payment verification only applies to WAITING_PAYMENT + UNPAID order and creates one verified payment.
+- [ ] Duplicate payment verification does not create a second revenue record.
+- [ ] Unpaid order cannot move to PREPARING.
+- [ ] Paid order stock deduction is all-or-nothing when entering PREPARING.
+- [ ] Repeated PREPARING request does not deduct stock twice.
+- [ ] Production writes inventory + production run + movement in one transaction.
+- [ ] Stock adjustment validates non-negative final stock and reason.
+- [ ] Direct sale recalculates prices on the server and writes sale + stock + movement atomically.
+- [ ] Insufficient stock leaves every involved document unchanged.
 
 ## Release note
 
-The Rules matrix is a test plan, not a test report. Record actual Emulator/staging results, date, project ID (non-secret), and commit SHA before marking launch-ready.
+Do not claim Rules/Functions are production-ready merely because unit tests pass. Record the CI run, emulator output, Firebase staging project ID (non-secret), and smoke-test date before deployment.

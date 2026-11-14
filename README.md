@@ -1,8 +1,8 @@
 # KudapKita Digital Platform
 
-Platform pemesanan camilan rumahan dengan storefront publik dan workspace owner untuk operasional usaha. Repository ini memakai React 19, TypeScript, Vite, Tailwind CSS, Firebase Authentication, Cloud Firestore, dan Firebase Hosting.
+Platform pemesanan camilan rumahan dengan storefront publik dan workspace owner untuk operasional usaha. Repository ini memakai React 19, TypeScript, Vite, Tailwind CSS, Firebase Authentication, Cloud Firestore, Firebase Callable Functions v2, dan Firebase Hosting.
 
-> **Status saat ini: implementasi fitur utama pada branch pengembangan; belum berstatus rilis produksi.** Source sudah memiliki katalog publik, cart, guest checkout, tracking sesi pelanggan, login owner, dashboard, CRUD kategori/produk, pengelolaan permintaan dan pembayaran manual, pencatatan produksi, inventaris produk jadi, penjualan langsung, laporan terverifikasi, dan pengaturan toko. Build/CI, Rules Emulator, Firebase staging, serta verifikasi data operasional harus lulus sebelum rilis.
+> **Status saat ini: implementasi fitur utama pada branch pengembangan; belum berstatus rilis produksi.** Source mencakup katalog publik, cart, guest checkout, tracking sesi pelanggan, login owner, dashboard, CRUD kategori/produk, pengelolaan permintaan, callable backend untuk pembayaran/pesanan/stok/penjualan, inventaris produk jadi, laporan terverifikasi, dan pengaturan toko. Root build, domain tests, dan Firestore Rules Emulator harus lulus sebelum staging; data operasional dan deployment tetap memerlukan project serta persetujuan owner.
 
 ## 1. Produk dan ruang lingkup
 
@@ -33,6 +33,7 @@ Persyaratan: Node.js 24.12+ dan npm.
 
 ```bash
 npm install
+npm install --prefix functions
 cp .env.example .env.local
 npm run dev
 ```
@@ -61,8 +62,13 @@ Pemeriksaan lokal:
 ```bash
 npm run typecheck
 npm run build
+npm --prefix functions run check
+npm --prefix functions test
+npx firebase-tools emulators:exec --only firestore --project demo-kudapkita "npm --prefix functions run test:rules"
 npm run preview
 ```
+
+Backend callable berjalan pada region `asia-southeast2`. Browser tidak memiliki fallback direct-write untuk order, pembayaran, stok, produksi, atau penjualan langsung. Jika Functions belum di-deploy, operasi tersebut akan gagal secara eksplisit.
 
 ## 4. Modul aplikasi
 
@@ -120,7 +126,8 @@ Penjualan lapak/kampus disimpan pada koleksi `directSales`, dengan snapshot nama
 ## 6. Firebase dan deployment awal
 
 1. Buat Firebase project milik KudapKita.
-2. Daftarkan Web App dan salin konfigurasi ke `.env.local`.
+2. Pastikan Blaze pricing plan telah disetujui owner sebelum deploy Cloud Functions. Jangan mengaktifkan billing tanpa izin owner.
+3. Daftarkan Web App dan salin konfigurasi ke `.env.local`.
 3. Aktifkan Email/Password Authentication untuk owner.
 4. Aktifkan Anonymous Authentication untuk guest checkout.
 5. Buat Cloud Firestore.
@@ -139,11 +146,15 @@ Penjualan lapak/kampus disimpan pada koleksi `directSales`, dengan snapshot nama
 ```
 
 9. Jalankan pemeriksaan Rules Emulator/Rules Playground sesuai `docs/security/FIRESTORE_RULES_TEST_MATRIX.md`.
-10. Deploy Firestore Rules dan indexes setelah pengujian:
+10. Deploy callable backend lebih dahulu ke staging:
+```bash
+firebase deploy --only functions
+```
+11. Uji callable pada staging (guest, owner aktif, owner nonaktif, non-owner), kemudian deploy Rules/indexes:
 ```bash
 firebase deploy --only firestore:rules,firestore:indexes
 ```
-11. Setelah smoke test staging lulus, build dan deploy Hosting:
+12. Setelah smoke test staging lulus, build dan deploy Hosting:
 ```bash
 npm run typecheck
 npm run build
@@ -154,23 +165,26 @@ Jangan menjalankan deployment dari lingkungan ini sebelum project ID, akun, data
 
 ## 7. Batas MVP dan keputusan keamanan
 
-- Tidak memakai Cloud Functions atau backend tepercaya.
+- Operasi transaksi memakai Cloud Functions callable. Deployment Cloud Functions memerlukan Blaze plan; billing tidak diaktifkan dari repository ini.
 - Tidak memakai Firebase Storage; dashboard tidak mengunggah foto atau bukti pembayaran.
 - Foto katalog disimpan sebagai aset statis pada `apps/web/public/images/products/`.
 - Verifikasi pembayaran dilakukan manual oleh owner; tidak ada payment gateway, QRIS dinamis, atau webhook.
-- Operasi stok dan penjualan berjalan melalui Firestore transaction di client dengan aturan akses owner. Ini menjaga konsistensi untuk alur aplikasi, tetapi **bukan pengganti backend tepercaya** terhadap owner yang memodifikasi data melalui konsol/SDK sendiri.
+- Order, pembayaran, stok, produksi, dan penjualan langsung hanya dapat dimutasi melalui callable Functions dengan server-side owner verification; Firestore Rules menolak direct client writes untuk koleksi-koleksi tersebut.
 - Rules membatasi status pesanan, pembacaan data pelanggan, dan penulisan histori. Rules tetap harus diuji pada Firebase Emulator.
 - Tracking guest terkait UID anonim pada sesi browser; bukan sistem akun pelanggan lintas perangkat.
 - Laporan saat ini adalah agregat sepanjang data terverifikasi yang tersedia; belum ada filter rentang tanggal, ekspor akuntansi, perhitungan laba, atau laporan HPP.
 - Persediaan saat ini adalah kuantitas produk jadi; belum ada resep, stok bahan baku, konversi satuan pecahan, atau kalkulasi HPP otomatis.
-- Tidak ada rate limiter/anti-spam kuat tanpa server tepercaya.
+- App Check belum diaktifkan/enforced; lakukan konfigurasi dan monitoring sebelum promosi publik.
+- Functions deployment memerlukan Firebase Blaze plan; biaya aktual bergantung pemakaian dan region.
 - Jangan memasukkan data transaksi riil sebelum Rules, backup, dan akses diuji.
 
 ## 8. Dependency audit\n\nCI typecheck dan build berhasil pada branch pengembangan. Namun, `npm audit` masih melaporkan empat entri high pada rantai Firebase/Firestore dan `@grpc/grpc-js`. Lihat `docs/security/DEPENDENCY_AUDIT_2026-11-14.md`. Saran downgrade besar dari npm tidak diterapkan tanpa uji kompatibilitas.\n\n## 9. Dokumen proyek
 
 - `docs/architecture/` — arsitektur, role, dan route.
 - `docs/database/FIRESTORE_SCHEMA.md` — koleksi dan snapshot transaksi.
-- `docs/security/SECURITY_MODEL.md` — akses dan batasan Spark MVP.
+- `docs/security/SECURITY_MODEL.md` — akses, trusted backend dan batasan MVP.
+- `docs/operations/CALLABLE_CONTRACT.md` — payload dan jaminan operasi backend.
+- `docs/operations/CLOUD_FUNCTIONS_DEPLOYMENT.md` — urutan staging/deployment callable.
 - `docs/security/FIRESTORE_RULES_TEST_MATRIX.md` — skenario Rules yang wajib diuji.
 - `docs/operations/IMPLEMENTATION_ROADMAP.md` — status implementasi.
 - `docs/operations/RELEASE_CHECKLIST.md` — checklist sebelum rilis.

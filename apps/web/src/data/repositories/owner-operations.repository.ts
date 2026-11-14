@@ -1,8 +1,9 @@
 import {
-  collection, doc, getDoc, getDocs, limit, orderBy, query, runTransaction,
+  collection, doc, getDoc, getDocs, limit, orderBy, query,
   serverTimestamp, writeBatch, where, type DocumentData, type Firestore,
 } from 'firebase/firestore';
 import { db } from '@/infrastructure/firebase/client';
+import { callIdempotentKudapKita } from '@/infrastructure/firebase/functions';
 
 function database(): Firestore {
   if (!db) throw new Error('Firebase belum dikonfigurasi.');
@@ -77,7 +78,6 @@ export async function saveManagedProduct(input: ProductInput, productId?: string
     sortOrder: input.sortOrder,
     updatedAt: serverTimestamp(),
   };
-  // The public projection is an explicit whitelist: HPP and internal notes stay private.
   const publicData = {
     name: privateData.name,
     slug: privateData.slug,
@@ -91,12 +91,10 @@ export async function saveManagedProduct(input: ProductInput, productId?: string
     sortOrder: privateData.sortOrder,
     updatedAt: serverTimestamp(),
   };
-  if (productId) {
-    batch.set(privateRef, privateData, { merge: true });
-  } else {
-    batch.set(privateRef, { ...privateData, createdAt: serverTimestamp() });
-  }
-  batch.set(publicRef, publicData, { merge: true });
+  if (productId) batch.set(privateRef, privateData, { merge: true });
+  else batch.set(privateRef, { ...privateData, createdAt: serverTimestamp() });
+  // Replace the public projection, so legacy/unapproved fields cannot linger.
+  batch.set(publicRef, publicData);
   await batch.commit();
   return privateRef.id;
 }
@@ -133,76 +131,17 @@ export async function listStock(): Promise<StockRecord[]> {
   });
 }
 
-async function writeStockMovement(
-  productId: string,
-  quantityDelta: number,
-  type: 'PRODUCTION' | 'ADJUSTMENT',
-  reason: string,
-): Promise<void> {
-  if (!Number.isSafeInteger(quantityDelta) || quantityDelta === 0) {
-    throw new Error('Jumlah perubahan stok harus berupa bilangan bulat dan tidak boleh nol.');
+export async function recordProduction(productId: string, quantity: number, note: string): Promise<void> {
+  if (!Number.isSafeInteger(quantity) || quantity <= 0) {
+    throw new Error('Jumlah produksi harus berupa bilangan bulat lebih dari nol.');
   }
-  const store = database();
-  const inventoryRef = doc(store, 'inventory', productId);
-  const productRef = doc(store, 'products', productId);
-  const movementRef = doc(collection(store, 'stockMovements'));
-  const productionRef = type === 'PRODUCTION' ? doc(collection(store, 'productionRuns')) : null;
-
-  await runTransaction(store, async (transaction) => {
-    const [inventorySnap, productSnap] = await Promise.all([
-      transaction.get(inventoryRef),
-      transaction.get(productRef),
-    ]);
-    if (!productSnap.exists() || productSnap.data().isArchived === true) {
-      throw new Error('Produk tidak ditemukan atau sudah diarsipkan.');
-    }
-    const product = productSnap.data();
-    const current = inventorySnap.exists() ? Number(inventorySnap.data().availableQty ?? 0) : 0;
-    const next = current + quantityDelta;
-    if (!Number.isSafeInteger(current) || current < 0 || next < 0) {
-      throw new Error('Stok tidak cukup atau data persediaan tidak valid.');
-    }
-    transaction.set(inventoryRef, {
-      productId,
-      productName: String(product.name),
-      availableQty: next,
-      unit: String(product.unit ?? 'pcs'),
-      updatedAt: serverTimestamp(),
-    }, { merge: true });
-    transaction.set(movementRef, {
-      productId,
-      productName: String(product.name),
-      type,
-      quantity: quantityDelta,
-      beforeQty: current,
-      afterQty: next,
-      reason: reason.trim(),
-      createdAt: serverTimestamp(),
-    });
-    if (productionRef) {
-      transaction.set(productionRef, {
-        productId,
-        productName: String(product.name),
-        quantity: quantityDelta,
-        unit: String(product.unit ?? 'pcs'),
-        note: reason.trim(),
-        status: 'COMPLETED',
-        stockMovementId: movementRef.id,
-        createdAt: serverTimestamp(),
-      });
-    }
-  });
+  await callIdempotentKudapKita('recordProduction', { productId, quantity, note });
 }
 
-export function recordProduction(productId: string, quantity: number, note: string): Promise<void> {
-  if (!Number.isSafeInteger(quantity) || quantity <= 0) throw new Error('Jumlah produksi harus berupa bilangan bulat lebih dari nol.');
-  return writeStockMovement(productId, quantity, 'PRODUCTION', note || 'Produksi selesai');
-}
-
-export function adjustFinishedStock(productId: string, delta: number, reason: string): Promise<void> {
+export async function adjustFinishedStock(productId: string, delta: number, reason: string): Promise<void> {
   if (!Number.isSafeInteger(delta) || delta === 0) throw new Error('Masukkan perubahan stok dalam bilangan bulat selain nol.');
   if (reason.trim().length < 3) throw new Error('Alasan penyesuaian stok wajib diisi.');
-  return writeStockMovement(productId, delta, 'ADJUSTMENT', reason);
+  await callIdempotentKudapKita('adjustFinishedStock', { productId, delta, reason });
 }
 
 export async function listStockMovements(maxRows = 30): Promise<Array<DocumentData & { id: string }>> {
@@ -230,73 +169,11 @@ export async function createDirectSale(
   note = '',
 ): Promise<{ id: string; total: number }> {
   if (!lines.length) throw new Error('Tambahkan minimal satu produk pada transaksi.');
-  if (lines.some((line) => !Number.isSafeInteger(line.quantity) || line.quantity < 1 || line.quantity > 100)) {
-    throw new Error('Jumlah produk tidak valid.');
-  }
-  const merged = new Map<string, number>();
-  for (const line of lines) merged.set(line.productId, (merged.get(line.productId) ?? 0) + line.quantity);
-  const store = database();
-  const saleRef = doc(collection(store, 'directSales'));
-  const productRows = Array.from(merged.entries());
-  const productRefs = productRows.map(([id]) => doc(store, 'products', id));
-  const inventoryRefs = productRows.map(([id]) => doc(store, 'inventory', id));
-  const movementRefs = productRows.map(() => doc(collection(store, 'stockMovements')));
-
-  const result = await runTransaction(store, async (transaction) => {
-    const productSnaps = await Promise.all(productRefs.map((ref) => transaction.get(ref)));
-    const stockSnaps = await Promise.all(inventoryRefs.map((ref) => transaction.get(ref)));
-    let total = 0;
-    const items: Array<{ productId: string; productName: string; unitPrice: number; quantity: number; subtotal: number }> = [];
-    const stockUpdates: Array<{ current: number; next: number; product: DocumentData; ref: typeof inventoryRefs[number]; movementRef: typeof movementRefs[number]; quantity: number }> = [];
-
-    for (let index = 0; index < productRows.length; index += 1) {
-      const [productId, quantity] = productRows[index];
-      const productSnap = productSnaps[index];
-      if (!productSnap.exists()) throw new Error('Salah satu produk tidak ditemukan.');
-      const product = productSnap.data();
-      if (product.isArchived === true) throw new Error('Produk sudah diarsipkan dan tidak dapat dijual.');
-      const unitPrice = Number(product.price);
-      if (!Number.isSafeInteger(unitPrice) || unitPrice <= 0) throw new Error('Harga produk belum ditetapkan atau tidak valid.');
-      const stockSnap = stockSnaps[index];
-      const current = stockSnap.exists() ? Number(stockSnap.data().availableQty ?? 0) : 0;
-      if (!Number.isSafeInteger(current) || current < quantity) throw new Error('Stok tidak cukup untuk menyimpan penjualan.');
-      const subtotal = unitPrice * quantity;
-      total += subtotal;
-      items.push({ productId, productName: String(product.name), unitPrice, quantity, subtotal });
-      stockUpdates.push({ current, next: current - quantity, product, ref: inventoryRefs[index], movementRef: movementRefs[index], quantity });
-    }
-
-    transaction.set(saleRef, {
-      channel: 'DIRECT',
-      items,
-      total,
-      paymentMethod,
-      paymentStatus: 'VERIFIED',
-      note: note.trim(),
-      createdAt: serverTimestamp(),
-    });
-    for (const update of stockUpdates) {
-      transaction.set(update.ref, {
-        productId: update.ref.id,
-        productName: String(update.product.name),
-        availableQty: update.next,
-        unit: String(update.product.unit ?? 'pcs'),
-        updatedAt: serverTimestamp(),
-      }, { merge: true });
-      transaction.set(update.movementRef, {
-        productId: update.ref.id,
-        productName: String(update.product.name),
-        type: 'DIRECT_SALE',
-        quantity: -update.quantity,
-        beforeQty: update.current,
-        afterQty: update.next,
-        referenceId: saleRef.id,
-        createdAt: serverTimestamp(),
-      });
-    }
-    return { id: saleRef.id, total };
-  });
-  return result;
+  const result = await callIdempotentKudapKita<
+    { items: DirectSaleLine[]; paymentMethod: string; note: string },
+    { id: string; total: number; created: boolean }
+  >('createDirectSale', { items: lines, paymentMethod, note });
+  return { id: result.id, total: result.total };
 }
 
 export async function getVerifiedSalesSummary(): Promise<{
@@ -349,14 +226,14 @@ export async function saveStoreSettings(
     whatsappNumber,
     instagramHandle: publicSettings.instagramHandle.trim(),
     updatedAt: serverTimestamp(),
-  }, { merge: true });
+  });
   batch.set(doc(store, 'privateSettings', 'business'), {
     bankName: privateSettings.bankName.trim(),
     bankAccountNumber: privateSettings.bankAccountNumber.trim(),
     bankAccountHolder: privateSettings.bankAccountHolder.trim(),
     pickupAddress: privateSettings.pickupAddress.trim(),
     updatedAt: serverTimestamp(),
-  }, { merge: true });
+  });
   await batch.commit();
 }
 
@@ -379,12 +256,9 @@ export async function saveCategory(input: { name: string; sortOrder: number; isA
   const store = database();
   const privateRef = categoryId ? doc(store, 'categories', categoryId) : doc(collection(store, 'categories'));
   const batch = writeBatch(store);
-  batch.set(privateRef, {
-    name, sortOrder: input.sortOrder, isActive: input.isActive, updatedAt: serverTimestamp(),
-  }, { merge: true });
-  batch.set(doc(store, 'publicCategories', privateRef.id), {
-    name, sortOrder: input.sortOrder, isActive: input.isActive, updatedAt: serverTimestamp(),
-  }, { merge: true });
+  const categoryData = { name, sortOrder: input.sortOrder, isActive: input.isActive, updatedAt: serverTimestamp() };
+  batch.set(privateRef, categoryData, { merge: true });
+  batch.set(doc(store, 'publicCategories', privateRef.id), categoryData);
   await batch.commit();
   return privateRef.id;
 }

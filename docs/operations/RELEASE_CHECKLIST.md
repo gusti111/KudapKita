@@ -1,50 +1,58 @@
 # KudapKita — Release Checklist
 
 ## Business data
-- [ ] Owner confirms product names, categories, sale units, selling prices, and HPP.
+- [ ] Owner confirms product names, categories, sale units, selling prices and HPP.
 - [ ] Owner confirms per-day production capacity and which products are ready-stock vs pre-order.
-- [ ] Owner confirms pickup address, delivery area/fee, WhatsApp number, Instagram handle, and bank account details.
+- [ ] Owner confirms pickup address, delivery area/fee, WhatsApp number, Instagram handle and bank account details.
 - [ ] Real photos replace placeholders. Confirm owner permission for all images.
-- [ ] Demo catalog is disabled in production.
+- [ ] Demo catalogue is disabled in production.
 
-## Firebase
-- [ ] Verify the exact Firebase project ID before deploying.
+## Firebase project and billing
+- [ ] Verify exact Firebase project ID and take a backup.
 - [ ] Enable Email/Password and Anonymous Authentication.
-- [ ] Create owner auth account and active `userProfiles/{uid}`.
-- [ ] Back up any existing Firestore data.
-- [ ] Run all cases in `FIRESTORE_RULES_TEST_MATRIX.md` in Emulator/staging.
-- [ ] Check public projection does not leak HPP, account details, or private notes.
-- [ ] Deploy `firestore.rules` and `firestore.indexes.json` only after Rules tests pass.
-- [ ] Test product list query, order query, payment summary query, stock movements, and production run query.
+- [ ] Create owner auth account and active `userProfiles/{uid}` through an administrator.
+- [ ] Confirm the Firebase project billing plan and budget alerts.
+- [ ] Cloud Functions deployment requires Blaze. Obtain explicit owner approval before upgrading/enabling billing; this repository does not activate billing.
+- [ ] Never deploy to Dapur Bunda's Firebase project or another reference project.
 
-## Application QA
-- [ ] `npm run typecheck` passes.
-- [ ] `npm run build` passes.\n- [ ] Review/resolve the open four-high npm audit finding in `DEPENDENCY_AUDIT_2026-11-14.md`; do not run `npm audit fix --force` as an unreviewed shortcut.
-- [ ] Test storefront at 320, 393, 768, 1024, and 1440 CSS px.
-- [ ] Test screen reader names, keyboard focus, form labels, empty/loading/error states.
-- [ ] Test guest checkout in a separate browser profile from owner login.
-- [ ] Test failed checkout retry and order tracking after refresh.
-- [ ] Test insufficient stock stops preparation without partial deduction.
-- [ ] Test production + stock increase in one transaction.
-- [ ] Test direct sale + stock decrease + movement in one transaction.
-- [ ] Test pickup and delivery lifecycle separately.
-- [ ] Confirm WhatsApp link and message use the configured business number.
-- [ ] Confirm that only verified payments contribute to reports.
+## Test gates
+- [ ] Root TypeScript check and Vite build pass on Node 24.12+.
+- [ ] Functions syntax check and domain unit tests pass on Node 22.
+- [ ] Firestore Rules Emulator tests pass.
+- [ ] Callable auth tests: anonymous customer, owner, inactive owner and non-owner.
+- [ ] Customer-supplied prices/names are not trusted by server.
+- [ ] Repeated callable request ID + same payload is idempotent.
+- [ ] Repeated callable request ID + different payload is rejected.
+- [ ] Insufficient stock prevents partial deduction.
+- [ ] Production, stock movement and inventory balance commit together.
+- [ ] Direct sale, stock movement and inventory balance commit together.
+- [ ] Paid online order stock deduction and status transition commit together.
+- [ ] Verify public projection does not leak HPP, bank data or private notes.
+- [ ] Resolve/accept the open npm audit findings documented in `DEPENDENCY_AUDIT_2026-11-14.md`.
 
-## Operations and handover
-- [ ] Agree who can access the owner account; use a strong unique password and MFA where available.
-- [ ] Record manual payment verification procedure.
-- [ ] Record manual process for transaction correction/refund.
-- [ ] Establish data export/backup cadence.
-- [ ] Train owner on category, product, price, HPP, production, stock, order, and direct-sale workflows.
-- [ ] Save a release tag and commit SHA.
-- [ ] Perform staging smoke test and owner sign-off before public launch.
+## Staging
+- [ ] Deploy Functions to the intended staging Firebase project.
+- [ ] Deploy Firestore Rules/indexes to staging after Emulator tests pass.
+- [ ] Test checkout in a separate guest browser profile.
+- [ ] Test duplicate checkout/network retry and own-order tracking.
+- [ ] Test owner quote, manual payment verification, preparation, pickup and delivery lifecycle.
+- [ ] Test production, stock adjustment and direct sale against staging data.
+- [ ] Confirm WhatsApp link/message uses owner-configured business number.
+- [ ] Verify backup/export and restore procedure.
+
+## Production and handover
+- [ ] Owner explicitly approves billing and target project.
+- [ ] Owner approves final content, products, prices, HPP, photos, contact and account details.
+- [ ] App Check configured and monitored.
+- [ ] Save release tag and commit SHA.
+- [ ] Perform production smoke test and owner sign-off.
+- [ ] Train owner on catalogue, orders, payment verification, production, stock, direct sales and reports.
 
 ## Known MVP exclusions
-- Automatic payment gateway or webhook.
+- Automatic payment gateway, dynamic QRIS and webhook.
 - Secure proof-of-payment upload.
-- Cloud Functions / trusted server validation and rate limiting.
 - Ingredient recipe inventory and automatic HPP calculation.
 - Multi-role cashier/warehouse accounts.
-- Date-range and profit/margin reporting.
-- Direct sale refund/cancellation workflow.
+- Date-range and profit/margin reports.
+- Refunds and direct-sale void/correction workflow.
+- App Check enforcement and advanced anti-abuse controls until configured.

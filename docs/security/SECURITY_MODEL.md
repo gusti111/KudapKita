@@ -1,67 +1,61 @@
-# Security Model — KudapKita MVP
+# Security Model — KudapKita
 
-## Identitas dan peran
+## Authentication and roles
 
-- Visitor tidak perlu login untuk membaca katalog yang dipublikasikan.
-- Customer memakai Firebase Anonymous Authentication ketika mengirim checkout.
-- Owner memakai Email/Password dan wajib memiliki `userProfiles/{uid}` dengan `role: owner` serta `isActive: true`.
-- Dokumen profile/role owner dibuat manual melalui Firebase Console, bukan dari browser.
-- Akses operasional hanya owner pada MVP. Role cashier/manager belum diaktifkan.
+- Visitor: public catalogue reads only.
+- Customer: Firebase Anonymous Authentication for guest checkout; can read only an order whose `createdByUid` matches the current UID.
+- Owner: Email/Password Authentication plus an active server-side `userProfiles/{uid}` document with `role: owner` and `isActive: true`.
+- Owner profiles are provisioned administratively. A browser client cannot grant itself the owner role.
+- Cashier/manager/warehouse roles are outside this MVP. Do not infer them from the Dapur Bunda reference roles.
 
-## Access matrix
+## Trusted transaction boundary
 
-| Resource | Visitor | Guest customer | Owner |
-|---|---:|---:|---:|
-| `publicProducts` published | Read | Read | Read/write |
-| `publicCategories` active | Read | Read | Read/write |
-| `publicSettings/storefront` | Get | Get | Read/write |
-| `products`, `categories` | Deny | Deny | Read/write, soft archive |
-| `orders` create | Deny | Initial request only | Read |
-| `orders` get | Deny | Own UID only | Read |
-| `orders` list | Deny | Deny | Read |
-| `orders` update | Deny | Deny | State transitions only |
-| `payments` | Deny | Deny | Create verified record, read |
-| `inventory` | Deny | Deny | Read/create/update |
-| `stockMovements`, `productionRuns` | Deny | Deny | Read/create, append-only |
-| `directSales` | Deny | Deny | Read/create, append-only |
-| `privateSettings` | Deny | Deny | Read/write |
-| `activityLogs` | Deny | Deny | Read/create |
+All operations that create or change business transactions and stock are callable Cloud Functions v2 in `functions/src/index.js`, region `asia-southeast2`:
 
-## Guardrails
+- `createOnlineOrder`: guest creates a request; server reloads product identity and display price from Firestore; no stock deduction or revenue is created at request time.
+- `confirmOrderQuote`: owner sets the confirmed amount for a REQUESTED, UNPAID order.
+- `verifyOrderPayment`: owner marks a payment verified after checking the real bank/merchant transaction; payment record and order payment state update atomically.
+- `transitionOrderStatus`: server validates the lifecycle; entering PREPARING deducts finished-goods stock and writes movements in the same transaction.
+- `recordProduction`: writes a completed production run, inventory increase and movement atomically.
+- `adjustFinishedStock`: validates a stock adjustment and reason; writes balance and movement atomically.
+- `createDirectSale`: recalculates product prices on the server and writes direct sale, inventory deduction and movement atomically.
 
-- Deny-by-default untuk koleksi yang tidak disebutkan.
-- Public projection adalah whitelist eksplisit; HPP tidak boleh ada pada `publicProducts`.
-- Customer hanya dapat membuat status awal `REQUESTED` + `UNPAID`, dengan `createdByUid` sama dengan UID anonim.
-- Customer tidak dapat melakukan list order, mengubah status, atau membaca pesanan milik UID lain.
-- Owner order update dibatasi pada konfirmasi total, verifikasi pembayaran, dan transisi state yang diizinkan.
-- Payments dan histori stock/production/direct sales tidak dapat diubah atau dihapus melalui Rules setelah dibuat.
-- Route guard React hanyalah UX. Firestore Rules tetap menjadi batas otorisasi server.
-- Jangan gunakan wildcard permissive seperti `allow read, write: if true`.
+Frontend uses Firebase Callable Functions through `apps/web/src/infrastructure/firebase/functions.ts`. There is no fallback to direct browser writes if a callable is unavailable.
 
-## Keterbatasan penting tanpa trusted backend
+## Firestore Rules
 
-KudapKita MVP tidak memakai Cloud Functions. Operasi stok dan pencatatan transaksi dijalankan melalui Firestore transactions dari klien owner. Ini memberi atomicity untuk alur aplikasi yang benar, tetapi tidak melindungi dari owner yang sengaja menulis nilai lain melalui SDK/Console. Client-side state machine dan Firestore Rules mengurangi risiko perubahan biasa, namun belum setara backend tepercaya.
+- Default-deny for collections not explicitly matched.
+- Public product and category documents use a whitelisted public projection. HPP does not appear in public data.
+- Public store settings expose store name, tagline, WhatsApp, and Instagram only.
+- Private bank details and pickup address live in `privateSettings/business`.
+- Client reads for orders are limited to owner or the order's own anonymous UID.
+- Client order/payment/inventory/stock movement/production/direct sale create-update-delete operations are denied. Admin SDK in callable Functions performs trusted writes.
+- Product/category editing remains owner-only client CRUD because it is catalogue configuration, not financial transaction processing.
+- Owner route guards improve UX but do not replace callable authorization or Firestore Rules.
 
-Tidak tersedia:
-- payment gateway / webhook;
-- unggah bukti pembayaran pelanggan ke Firebase Storage;
-- idempotency dan anti-spam backend;
-- jadwal pembatalan order otomatis;
-- audit log tamper-proof;
-- multi-role staff.
+## Idempotency and integrity
 
-Owner wajib memeriksa harga, ketersediaan, jadwal, delivery fee, serta transaksi aktual secara manual. Sebelum otomatisasi pembayaran, reservasi stok multi-customer, atau operasi staf, evaluasi Cloud Functions/Cloud Run dan billing terpisah.
+Each callable transaction operation validates input server-side. For retryable actions, the client supplies a random `clientRequestId`; the backend derives a deterministic document ID scoped by UID and operation type. The backend also stores a SHA-256 request fingerprint. Reusing a key for a different payload is rejected rather than silently returning an unrelated previous result.
+
+Order status and payment status remain separate. A payment confirmation is a manual business action; WhatsApp messages or screenshots are not automatically treated as proof of payment. No payment gateway or webhook is integrated.
+
+## Data and operational boundaries
+
+- Finished-goods stock only; no ingredient recipes, fractional ingredient consumption, supplier purchasing or automated HPP calculation.
+- Reports currently aggregate verified online payments and direct sales; date-range reporting, refunds and accounting exports are not included.
+- No secure proof-of-payment file upload; Firebase Storage has not been configured.
+- No App Check enforcement, rate limiting, automated abuse controls or tamper-proof audit log yet.
+- No multi-role staff access.
+- Guest order tracking is tied to the anonymous browser session; it is not a cross-device customer account system.
 
 ## Deployment prerequisites
 
-1. Verifikasi Firebase project ID dan backup data.
-2. Deploy Rules dan indexes hanya setelah Rules Emulator/Rules Playground lulus.
-3. Buat dan uji akun owner aktif.
-4. Uji checkout menggunakan browser profile terpisah dari sesi owner.
-5. Uji pembatasan dokumen dan status dengan UID guest berbeda.
-6. Jangan memasukkan transaksi nyata sebelum smoke test staging selesai.
-
-
-## Dependency audit gate (14 November 2026)
-
-CI currently passes TypeScript and Vite build on Node 24.12, but `npm audit` reports four high-severity package entries: `firebase@13.2.0`, `@firebase/firestore@4.19.1`, `@firebase/firestore-compat@0.4.17`, and transitive `@grpc/grpc-js@1.9.16`. The Firestore SDK pins the Node gRPC transport to `~1.9.0`; the upstream tracking issue is documented in `docs/security/DEPENDENCY_AUDIT_2026-11-14.md`. This app uses the browser Firebase SDK, where Node gRPC is not loaded by the browser runtime, but the install tree is still not audit-clean. Do not force a Firebase major downgrade. Resolve/accept this item before introducing Node-side Firebase Admin, Functions, gRPC server capabilities, or claiming a clean dependency audit.
+1. Verify Firebase project ID and take a backup.
+2. Enable Email/Password Authentication and Anonymous Authentication.
+3. Provision an owner profile administratively.
+4. Confirm the Firebase project is on Blaze before deploying Cloud Functions. Do not enable or upgrade billing without the owner's explicit approval.
+5. Run domain/unit tests and Firestore Rules Emulator tests.
+6. Deploy Functions to a non-production/staging project first.
+7. Run callable smoke tests as anonymous customer, active owner, inactive owner and non-owner.
+8. Deploy Firestore Rules and indexes, then Hosting only after the staging checks pass.
+9. Enable and monitor Firebase App Check before broader public promotion.
