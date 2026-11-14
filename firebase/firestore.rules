@@ -1,0 +1,153 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner() {
+      return signedIn()
+        && exists(/databases/$(database)/documents/userProfiles/$(request.auth.uid))
+        && get(/databases/$(database)/documents/userProfiles/$(request.auth.uid)).data.role == 'owner'
+        && get(/databases/$(database)/documents/userProfiles/$(request.auth.uid)).data.isActive == true;
+    }
+
+    function isGuestSession() {
+      return signedIn()
+        && request.auth.token.firebase.sign_in_provider == 'anonymous';
+    }
+
+    function isPublishedProduct(productId) {
+      let productPath = /databases/$(database)/documents/publicProducts/$(productId);
+      return exists(productPath) && get(productPath).data.isPublished == true;
+    }
+
+    function validOrderItem(item) {
+      return item is map
+        && item.keys().hasOnly(['productId', 'productName', 'variantName', 'quantity', 'displayedUnitPrice'])
+        && item.keys().hasAll(['productId', 'productName', 'quantity'])
+        && item.productId is string
+        && item.productId.size() > 0
+        && item.productName is string
+        && item.productName.size() > 0
+        && isPublishedProduct(item.productId)
+        && item.productName == get(/databases/$(database)/documents/publicProducts/$(item.productId)).data.name
+        && item.quantity is int
+        && item.quantity >= 1
+        && item.quantity <= 50
+        && (!('variantName' in item) || item.variantName is string)
+        && (!('displayedUnitPrice' in item) || (item.displayedUnitPrice is int
+          && item.displayedUnitPrice >= 0
+          && get(/databases/$(database)/documents/publicProducts/$(item.productId)).data.price == item.displayedUnitPrice));
+    }
+
+    function validOrderItems(items) {
+      return items is list
+        && items.size() >= 1
+        && items.size() <= 6
+        && validOrderItem(items[0])
+        && (items.size() < 2 || validOrderItem(items[1]))
+        && (items.size() < 3 || validOrderItem(items[2]))
+        && (items.size() < 4 || validOrderItem(items[3]))
+        && (items.size() < 5 || validOrderItem(items[4]))
+        && (items.size() < 6 || validOrderItem(items[5]));
+    }
+
+    match /userProfiles/{uid} {
+      allow get: if isOwner() || (signedIn() && request.auth.uid == uid);
+      allow list: if isOwner();
+      // Owner role documents are provisioned in Firebase Console, never by a public client.
+      allow create, update, delete: if false;
+    }
+
+    match /publicProducts/{productId} {
+      allow get, list: if isOwner() || resource.data.isPublished == true;
+      allow create, update, delete: if isOwner();
+    }
+
+    match /publicCategories/{categoryId} {
+      allow get, list: if isOwner() || resource.data.isActive == true;
+      allow create, update, delete: if isOwner();
+    }
+
+    match /publicSettings/{documentId} {
+      allow get: if true;
+      allow list: if false;
+      allow create, update, delete: if isOwner();
+    }
+
+    match /products/{productId} {
+      allow read, write: if isOwner();
+    }
+
+    match /categories/{categoryId} {
+      allow read, write: if isOwner();
+    }
+
+    match /orders/{orderId} {
+      allow create: if isGuestSession()
+        && request.resource.data.keys().hasOnly([
+          'createdByUid', 'customerName', 'customerWhatsApp', 'fulfillmentMethod',
+          'deliveryAddress', 'customerNote', 'items', 'orderStatus', 'paymentStatus',
+          'source', 'createdAt'
+        ])
+        && request.resource.data.keys().hasAll([
+          'createdByUid', 'customerName', 'customerWhatsApp', 'fulfillmentMethod',
+          'items', 'orderStatus', 'paymentStatus', 'source', 'createdAt'
+        ])
+        && request.resource.data.createdByUid == request.auth.uid
+        && request.resource.data.customerName is string
+        && request.resource.data.customerName.size() >= 2
+        && request.resource.data.customerName.size() <= 80
+        && request.resource.data.customerWhatsApp is string
+        && request.resource.data.customerWhatsApp.size() >= 8
+        && request.resource.data.customerWhatsApp.size() <= 20
+        && request.resource.data.fulfillmentMethod in ['PICKUP', 'DELIVERY']
+        && request.resource.data.orderStatus == 'REQUESTED'
+        && request.resource.data.paymentStatus == 'UNPAID'
+        && request.resource.data.source == 'ONLINE'
+        && request.resource.data.createdAt == request.time
+        && validOrderItems(request.resource.data.items)
+        && (request.resource.data.fulfillmentMethod != 'DELIVERY'
+          || ('deliveryAddress' in request.resource.data && request.resource.data.deliveryAddress is string && request.resource.data.deliveryAddress.size() >= 5))
+        && (!('customerNote' in request.resource.data) || request.resource.data.customerNote is string);
+
+      allow get: if isOwner() || (signedIn() && resource.data.createdByUid == request.auth.uid);
+      allow list: if isOwner();
+      allow update, delete: if isOwner();
+    }
+
+    match /orderPrivate/{orderId} {
+      allow read, write: if isOwner();
+    }
+
+    match /payments/{paymentId} {
+      allow read, write: if isOwner();
+    }
+
+    match /inventory/{productId} {
+      allow read, write: if isOwner();
+    }
+
+    match /stockMovements/{movementId} {
+      allow read, write: if isOwner();
+    }
+
+    match /directSales/{saleId} {
+      allow read, write: if isOwner();
+    }
+
+    match /privateSettings/{documentId} {
+      allow read, write: if isOwner();
+    }
+
+    match /activityLogs/{logId} {
+      allow read, write: if isOwner();
+    }
+
+    // Deny by default for every collection not explicitly listed above.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

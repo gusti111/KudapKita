@@ -1,0 +1,2 @@
+import { Link } from 'react-router-dom';
+export function NotFoundPage() { return <main className="grid min-h-screen place-items-center bg-cream px-4 text-center"><div><div className="font-serif text-6xl font-bold text-cocoa">404</div><h1 className="mt-3 text-xl font-semibold text-cocoa">Halaman tidak ditemukan</h1><p className="mt-2 text-sm text-muted">Alamat yang dibuka tidak tersedia.</p><Link to="/" className="mt-5 inline-block text-sm font-semibold text-terracotta">Kembali ke beranda →</Link></div></main>; }

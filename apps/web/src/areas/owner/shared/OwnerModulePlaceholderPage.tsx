@@ -1,0 +1,4 @@
+import { Construction } from 'lucide-react';
+export function OwnerModulePlaceholderPage({ title, description }: { title: string; description: string }) {
+  return <div><span className="text-xs font-bold uppercase tracking-[.18em] text-terracotta">Owner workspace</span><h1 className="mt-2 font-serif text-3xl font-bold text-cocoa">{title}</h1><p className="mt-1 text-sm text-muted">{description}</p><div className="mt-8 rounded-2xl border border-dashed border-stroke bg-white p-10 text-center"><Construction size={30} className="mx-auto text-muted"/><h2 className="mt-3 font-semibold text-cocoa">Struktur modul telah disiapkan</h2><p className="mx-auto mt-2 max-w-md text-sm leading-6 text-muted">Halaman ini merupakan kerangka navigasi. Logika bisnis, query Firestore, validasi, dan pengujian modul akan ditambahkan pada tahap implementasi berikutnya.</p></div></div>;
+}
