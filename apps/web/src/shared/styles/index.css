@@ -65,15 +65,23 @@
   --color-success-100: var(--status-success-100);
   --color-success-600: var(--status-success-600);
   --color-success-700: var(--status-success-700);
+  --color-success: var(--status-success-700);
+  --color-success-soft: var(--status-success-100);
   --color-warning-50: var(--status-warning-50);
   --color-warning-100: var(--status-warning-100);
   --color-warning-700: var(--status-warning-700);
+  --color-warning: var(--status-warning-700);
+  --color-warning-soft: var(--status-warning-100);
   --color-danger-50: var(--status-danger-50);
   --color-danger-100: var(--status-danger-100);
   --color-danger-700: var(--status-danger-700);
+  --color-danger: var(--status-danger-700);
+  --color-danger-soft: var(--status-danger-100);
   --color-info-50: var(--status-info-50);
   --color-info-100: var(--status-info-100);
   --color-info-700: var(--status-info-700);
+  --color-info: var(--status-info-700);
+  --color-info-soft: var(--status-info-100);
 
   /* Stable semantic names — preserve existing JSX and CSS contracts */
   --color-cocoa: var(--brand-cocoa-700);
@@ -90,6 +98,14 @@
   --color-amber-soft: var(--status-warning-100);
   --color-rose: var(--status-danger-700);
   --color-rose-soft: var(--status-danger-100);
+  --color-success: var(--status-success-700);
+  --color-success-soft: var(--status-success-100);
+  --color-warning: var(--status-warning-700);
+  --color-warning-soft: var(--status-warning-100);
+  --color-danger: var(--status-danger-700);
+  --color-danger-soft: var(--status-danger-100);
+  --color-info: var(--status-info-700);
+  --color-info-soft: var(--status-info-100);
   --color-blue: var(--status-info-700);
   --color-blue-soft: var(--status-info-100);
   --color-terracotta: var(--brand-terracotta-700);
@@ -156,6 +172,8 @@
   --radius-2xl: var(--shape-radius-2xl);
   --radius-3xl: var(--shape-radius-3xl);
   --radius-card: var(--shape-radius-card);
+  --radius-control: var(--shape-radius-control);
+  --radius-full: var(--shape-radius-pill);
   --radius-pill: 9999px;
 
   --shadow-soft: var(--elevation-soft);
