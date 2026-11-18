@@ -1,110 +1,149 @@
-# KudapKita Platform — Project Scaffold v1.0
+# KudapKita Platform
 
-Starter project untuk **KudapKita Digital Platform** menggunakan React, TypeScript, Vite, Tailwind CSS, Firebase Authentication, Cloud Firestore, dan Firebase Hosting.
+## ⚠️ Important: NDK Not Required
 
-> Status: fondasi struktur dan alur dasar. Ini belum merupakan aplikasi bisnis yang selesai. Katalog demo, checkout guest, autentikasi owner, dashboard, daftar pesanan, serta aturan akses dasar sudah disiapkan. CRUD produk, verifikasi pembayaran lengkap, produksi, stok, penjualan langsung, laporan, dan pengaturan masih perlu implementasi dan pengujian.
+This is a **web React/Vite project** - **NDK (Native Development Kit) is NOT required** for `npm run dev` to work.
 
-## 1. Peran pengguna
+The `npm run dev` command simply starts the Vite development server to serve the React web application locally. No native code compilation or Android NDK is involved.
 
-| Role | Akses | Keterangan |
-|---|---|---|
-| Visitor | Publik | Buka beranda, baca katalog, cari produk, dan mengisi keranjang lokal. |
-| Customer | Guest/anonymous session | Sesi anonim dibuat ketika checkout agar pesanan dapat dikaitkan ke UID Firebase. Tidak perlu membuat akun/password. |
-| Owner | Email/password + `userProfiles/{uid}` role `owner` | Mengakses workspace privat dan mengelola operasional. |
+### Project Stack:
+- **React 19** + **TypeScript** + **Vite 7** + **Tailwind CSS 4**
+- **Firebase** for backend services (Authentication, Firestore, Storage, Functions)
+- **Node.js 24.12.0** for workspace web, **Node.js 22** for Firebase Functions
 
-Tidak ada halaman registrasi owner. Akun pertama harus dibuat melalui Firebase Authentication Console, lalu dokumen profil owner dibuat secara manual di Firestore.
-
-## 2. Persyaratan lokal
-
-- Node.js 22.12 atau lebih baru (lihat `.nvmrc`).
-- npm.
-- Akun Firebase untuk mengaktifkan backend.
-
-## 3. Menjalankan project
-
-```bash
-npm install
-cp .env.example .env.local
+### Running the Development Server:
+```powershell
+npm ci
 npm run dev
 ```
+Starts Vite at `http://localhost:5173`
 
-Pada Windows PowerShell, salin `.env.example` menjadi `.env.local` secara manual atau jalankan `Copy-Item .env.example .env.local`.
+### No NDK Configuration:
+This project contains no native C/C++ code, no `android/` folder, and no NDK setup. The Android-related items in `package-lock.json` are merely CSS optimization targets (`lightningcss-android-arm64`, `@esbuild/android-*`) used for building web assets, not native Android development.
 
-Isi variabel `VITE_FIREBASE_*` dari Firebase Console > Project settings > Your apps. Isi `VITE_PUBLIC_WHATSAPP_NUMBER` dengan nomor WhatsApp Business KudapKita dalam format internasional tanpa tanda `+`, spasi, atau tanda baca.
+### If You Need Android Native Code:
+This web project does not support native Android development out-of-the-box. For Android functionality, a separate React Native or native module project would be required.
 
-Build dan pemeriksaan TypeScript:
+## Stack dan versi runtime
 
-```bash
+- React 19 + TypeScript + Vite 7 + Tailwind CSS 4
+- Firebase Authentication, Cloud Firestore, Cloud Storage, dan Callable Cloud Functions
+- Node.js **24.12.0** untuk workspace web (lihat `.nvmrc` dan `package.json`)
+- Node.js **22** untuk runtime Firebase Functions (lihat `functions/package.json` dan `firebase.json`)
+
+## Menjalankan aplikasi di Windows
+
+1. Pasang Node.js 24.12.0 atau gunakan Node Version Manager for Windows.
+2. Dari folder root proyek, salin template environment:
+
+   ```powershell
+   Copy-Item .env.example .env.local
+   ```
+
+3. Isi `.env.local` dengan konfigurasi Firebase Web App dari Firebase Console. Jangan bagikan file ini dan jangan commit ke Git.
+4. Instal dependency dan jalankan Vite:
+
+   ```powershell
+   npm ci
+   npm run dev
+   ```
+
+5. Buka alamat localhost yang ditampilkan Vite (umumnya `http://localhost:5173`).
+
+Untuk dependency backend Functions:
+
+```powershell
+npm ci --prefix functions
+npm --prefix functions run check
+npm --prefix functions test
+```
+
+`VITE_ENABLE_DEMO_CATALOG=true` hanya untuk melihat katalog demo ketika Firebase belum dikonfigurasi. Checkout dan transaksi nyata memerlukan Firebase aktif. Sebelum digunakan pelanggan, pastikan konfigurasi Firebase terisi dan demo catalog dinonaktifkan (`VITE_ENABLE_DEMO_CATALOG=false`).
+
+## Area aplikasi
+
+### Storefront pelanggan
+
+- Beranda dengan hero carousel, cerita brand, kategori, pilihan produk, dan cara pemesanan.
+- Katalog dengan pencarian, filter, sortir, dan detail produk.
+- Keranjang berbasis browser, checkout tamu, pilihan ambil sendiri/pengantaran, dan pelacakan pesanan berdasarkan sesi pelanggan.
+- Navigasi mobile dengan menu ringkas, responsif untuk layar kecil; motion reveal diterapkan secara selektif dan mengikuti `prefers-reduced-motion`.
+- Setelah permintaan checkout dikirim, admin memeriksa ketersediaan, jadwal, dan ongkir. Pelanggan menerima konfirmasi total akhir melalui alur operasional/WhatsApp yang tersedia.
+
+### Workspace owner
+
+- Login owner dan route guard berbasis role yang dibaca dari Firebase.
+- Navigasi mobile Owner menggunakan bottom bar dan drawer agar semua halaman pengelolaan tetap dapat diakses tanpa menu horizontal yang padat; daftar produk berubah menjadi kartu ringkas pada layar HP.
+- Dashboard, inbox pesanan, produk, kategori, produksi, persediaan produk jadi, penjualan langsung, laporan, dan pengaturan toko.
+- Penjualan langsung mendukung beberapa item dalam satu transaksi.
+- HPP dan pengaturan privat disimpan pada data owner, tidak dimasukkan ke proyeksi katalog publik.
+
+## Batasan operasional yang harus dipahami
+
+- Checkout membuat **permintaan pesanan**, bukan bukti bahwa pesanan sudah disetujui atau dibayar.
+- Harga final, ongkir, jadwal, dan ketersediaan dikonfirmasi admin sebelum pembayaran.
+- Verifikasi pembayaran dilakukan manual oleh owner melalui workspace. Belum ada payment gateway.
+- Upload bukti transfer di dalam aplikasi belum tersedia. Storage rules saat ini sengaja menolak file selain gambar produk pada path yang diizinkan.
+- Peta live, pemilihan pin pelanggan, geofence poligon, Google Maps Routes/Places API, dan kalkulasi ongkir otomatis belum diaktifkan. Zona gratis yang direncanakan adalah Pasar Bahagia dan Kisaran Kuala Dua; jangan menjanjikan ongkir otomatis sampai pin toko, batas zona, tarif, API, dan uji rute disetujui owner.
+- Campaign carousel saat ini menggunakan tiga slide statis di source code; belum ada CMS campaign di dashboard owner.
+- Keranjang tersimpan secara lokal pada browser. Fitur akun Member, riwayat lintas perangkat, dan reorder belum disediakan. Guest dan Member Premium belum memiliki dua dashboard terpisah.
+- QR Owner Device Pairing belum tersedia. Owner saat ini tetap menggunakan login email/password; rancangan keamanan pairing tersedia di `docs/security/OWNER_DEVICE_PAIRING_DESIGN.md`.
+- Sistem paket, harga, benefit, pembayaran langganan, serta entitlement Premium belum tersedia. Lihat `docs/architecture/MEMBER_EXPERIENCE_PLAN.md`; jangan menampilkan status Premium sebelum entitlement backend dibangun.
+- Gambar bawaan katalog adalah ilustrasi AI dan sudah diberi label; ganti dengan foto produk aktual yang disetujui owner sebelum peluncuran komersial.
+- Nama kontak, rekening, alamat, harga final, HPP, jam produksi, dan kebijakan pembatalan harus dikonfirmasi owner. Jangan mengisi angka/fakta operasional dengan tebakan.
+
+## Tes yang tersedia
+
+```powershell
 npm run typecheck
 npm run build
-npm run preview
+npm run check:functions
+npm run test:functions
 ```
 
-## 4. Mengaktifkan Firebase Spark
+Firestore Rules Emulator tests tersedia di `functions/test/firestore.rules.test.mjs` melalui script `npm --prefix functions run test:rules`; jalankan dengan Firebase Emulator Suite sesuai dokumen security. Lulus unit test domain saja belum cukup untuk menyatakan aplikasi siap produksi.
 
-1. Buat project Firebase dan daftarkan Web App.
-2. Aktifkan Email/Password di Authentication untuk owner.
-3. Aktifkan Anonymous sign-in untuk checkout guest.
-4. Buat Cloud Firestore.
-5. Deploy Rules dan indexes:
+## Firebase dan deployment
 
-```bash
-npm install -g firebase-tools
-firebase login
-firebase use --add
-firebase deploy --only firestore:rules,firestore:indexes
+Project yang direferensikan paket ini: `kudapkita-8dd9a`. Gunakan project secara eksplisit, jangan mengandalkan alias lokal:
+
+```powershell
+firebase deploy --project kudapkita-8dd9a --only hosting
 ```
 
-6. Buat akun owner di Authentication Console.
-7. Salin UID owner, lalu buat dokumen `userProfiles/{UID}` di Firestore:
+Deploy Functions dan security rules secara terpisah setelah backup, review environment, dan lulus staging/emulator tests:
 
-```json
-{
-  "uid": "UID_DARI_FIREBASE_AUTH",
-  "displayName": "Owner KudapKita",
-  "email": "EMAIL_OWNER",
-  "role": "owner",
-  "isActive": true
-}
+```powershell
+firebase deploy --project kudapkita-8dd9a --only functions
+firebase deploy --project kudapkita-8dd9a --only firestore:rules,firestore:indexes,storage
 ```
 
-Dokumen role tidak boleh dibuat dari browser. Jangan memasukkan password, private key, atau service account ke frontend.
+Jangan melakukan deploy ke produksi sebelum owner mengonfirmasi data toko, konfigurasi pembayaran/pengiriman, akun owner, billing, backup, dan hasil uji lintas perangkat. File `.firebaserc` hanya menyimpan project reference; tidak berisi kredensial.
 
-## 5. Struktur arsitektur
+## Struktur utama
 
-Lihat `docs/PROJECT_STRUCTURE.md`, `docs/architecture/`, `docs/database/`, dan `docs/security/` untuk penjelasan lengkap.
+```text
+apps/web/       React storefront + owner workspace + PWA assets
+functions/      Trusted Firebase callable backend and tests
+firebase/       Firestore/Storage security rules and indexes
+docs/           Architecture, design, security, operations, and audit docs
+02_Dokumentasi/ PRD and technical roadmap v2.0 (source of product decisions)
+```
 
-## 6. Batasan MVP Rp0
+## Data dan keamanan
 
-- Tidak ada Cloud Functions.
-- Tidak ada Firebase Storage; upload bukti transfer tidak tersedia. Pelanggan mengirim konfirmasi melalui WhatsApp.
-- Foto katalog ditempatkan sebagai aset statis di `apps/web/public/images/products/`, bukan diunggah melalui dashboard.
-- Pembayaran diverifikasi manual oleh owner.
-- Firestore Rules membatasi akses. Frontend guard hanya untuk UX, bukan pengganti Security Rules.
-- Katalog demo hanya tampil jika Firebase belum dikonfigurasi dan `VITE_ENABLE_DEMO_CATALOG=true`.
-- Tidak ada jaminan anti-spam/anti-abuse menyeluruh tanpa lapisan backend tepercaya. Pantau penggunaan Auth dan Firestore.
+- `.env.local` berisi konfigurasi lokal dan wajib tetap di komputer pengembang. Jangan kirim atau commit.
+- `.env.example` hanya template tanpa kredensial.
+- Jangan pernah memasukkan Firebase Admin service-account JSON, private key, password, token, atau payment credential ke source ZIP.
+- Perubahan order, pembayaran, stok dan penjualan langsung melewati callable backend; browser tidak diberi izin menulis langsung ke koleksi transaksi.
+- Owner profile dibuat melalui proses provisioning tepercaya; jangan membuat role owner dari client/browser.
 
-Kuota Spark tidak berarti semua produk Firebase gratis tanpa syarat. Periksa halaman harga dan kuota resmi sebelum deployment.
 
-## 7. Poin keamanan penting
+## Audit dan perubahan UI 18 November 2026
 
-- Customer hanya dapat membuat order dengan status awal `REQUESTED` dan `UNPAID`.
-- Customer tidak dapat mengubah atau menghapus order setelah dikirim.
-- Customer hanya dapat membaca dokumen order milik UID guest sendiri.
-- Owner harus memiliki dokumen profil aktif dengan `role: owner`.
-- Data internal produk, inventory, pembayaran, private settings, dan activity logs hanya dapat diakses owner.
-- `displayedUnitPrice` pada request pelanggan adalah snapshot tampilan yang tidak tepercaya. Owner harus memeriksa ulang harga/ketersediaan dan mengisi total terkonfirmasi sebelum meminta pembayaran.
-- Firestore Rules pada scaffold adalah baseline awal; wajib diuji di Emulator/Rules Playground sebelum digunakan dengan data nyata.
+- Audit struktur, role, keamanan, dan rancangan Member/QR: `docs/audit/PROJECT_AUDIT_IMPLEMENTATION_2026-11-18.md`.
+- Rincian redesign frontend tahap kedua: `docs/audit/FRONTEND_REDESIGN_PHASE_2_2026-11-18.md`.
+- Rancangan keamanan QR Owner: `docs/security/OWNER_DEVICE_PAIRING_DESIGN.md`.
+- Rencana pengalaman Guest/Member: `docs/architecture/MEMBER_EXPERIENCE_PLAN.md`.
 
-## 8. Dokumen
-
-- `docs/requirements/` — salinan PRD final dan Design Brief yang menjadi acuan proyek.
-
-- `docs/PROJECT_STRUCTURE.md` — direktori dan tanggung jawab.
-- `docs/architecture/SYSTEM_OVERVIEW.md` — arsitektur aplikasi.
-- `docs/architecture/ROLES_AND_ROUTES.md` — pemisahan area visitor/customer/owner.
-- `docs/database/FIRESTORE_SCHEMA.md` — rancangan koleksi.
-- `docs/security/SECURITY_MODEL.md` — hak akses dan batas Spark.
-- `docs/security/FIRESTORE_RULES_TEST_MATRIX.md` — skenario allow/deny sebelum deployment.
-- `docs/operations/IMPLEMENTATION_ROADMAP.md` — tahap implementasi.
-- `docs/design/` — design handoff dan prototype HTML sebelumnya.
+Tahap kedua memperbarui katalog, dialog produk, keranjang, checkout, pelacakan pesanan, dashboard Owner, dan manajemen pesanan. Status saat ini tetap **belum siap produksi**: QR pairing dan Member subscription belum aktif; build/typecheck frontend resmi, emulator, staging, dan uji browser/perangkat masih perlu dilakukan.
