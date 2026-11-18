@@ -155,6 +155,24 @@ The application uses React Router to separate public and owner experiences. Doma
 
 **MVP limitation:** order creation and owner order/payment updates on main are performed by the web client through the Firebase Web SDK. Before production use, review the security rules and consider moving trusted payment and order-state transitions into server-side functions.
 
+## Customer-to-owner order flow
+
+```mermaid
+flowchart TD
+    A["Customer opens storefront"] --> B["Browse and filter catalog"]
+    B --> C["Add products to cart"]
+    C --> D["Submit guest order request"]
+    D --> E["Create REQUESTED / UNPAID order"]
+    E --> F["Owner reviews request and availability"]
+    F --> G["Owner confirms final amount"]
+    G --> H["Customer pays outside the application"]
+    H --> I["Owner verifies actual payment"]
+    I --> J["Owner updates fulfillment status"]
+    J --> K["Order completed"]
+```
+
+The flow intentionally separates an order request from payment verification. The current MVP does not process payments automatically.
+
 ## Technology
 
 - React 19 and TypeScript 5.9
