@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from 'react';
+import { useCallback, useEffect, useState, type ChangeEvent, type FormEvent, type ReactNode } from 'react';
 import {
   Archive, CheckCircle2, Factory, Plus, RefreshCw, Save, Settings,
 } from 'lucide-react';
@@ -11,6 +11,11 @@ import {
 } from '@/data/repositories/owner-operations.repository';
 import { formatRupiah } from '@/shared/utils/format';
 import { getErrorMessage } from '@/shared/utils/errors';
+import { uploadProductPhoto } from '@/data/repositories/product-image.repository';
+import {
+  approveOwnerPairing, createOwnerPairingChallenge, getOwnerPairingStatus,
+  listOwnerDevices, revokeOwnerDevice, type OwnerDeviceRecord,
+} from '@/data/repositories/pairing.repository';
 
 function useResource<T>(load: () => Promise<T>) {
   const [data, setData] = useState<T | null>(null);
@@ -94,8 +99,20 @@ export function OwnerProductsPage() {
   const [draft, setDraft] = useState<ProductDraft>(emptyProduct);
   const [editingId, setEditingId] = useState('');
   const [saving, setSaving] = useState(false);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  async function handlePhotoUpload(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    setUploadingPhoto(true); setError(''); setSuccess('');
+    try {
+      const imagePath = await uploadProductPhoto(file);
+      setDraft((current) => ({ ...current, imagePath }));
+      setSuccess('Foto berhasil diunggah. Simpan produk untuk menerbitkan perubahan katalog.');
+    } catch (reason) { setError(getErrorMessage(reason)); }
+    finally { setUploadingPhoto(false); event.target.value = ''; }
+  }
   function edit(item: ManagedProduct) {
     setEditingId(item.id);
     setDraft({ name: item.name, slug: item.slug, shortDescription: item.shortDescription, categoryId: item.categoryId, price: item.price == null ? '' : String(item.price), hpp: item.hpp == null ? '' : String(item.hpp), unit: item.unit, imagePath: item.imagePath ?? '', availability: item.availability, isPublished: item.isPublished, sortOrder: String(item.sortOrder) });
@@ -145,6 +162,11 @@ export function OwnerProductsPage() {
           <div className="grid gap-3 sm:grid-cols-2"><Input label="Harga jual (Rp)" value={draft.price} onChange={(value) => setDraft((current) => ({ ...current, price: value }))} type="number" min={0} step={1}/><Input label="HPP privat (Rp)" value={draft.hpp} onChange={(value) => setDraft((current) => ({ ...current, hpp: value }))} type="number" min={0} step={1}/></div>
           <div className="grid gap-3 sm:grid-cols-2"><Input label="Satuan" value={draft.unit} onChange={(value) => setDraft((current) => ({ ...current, unit: value }))}/><Input label="Urutan tampil" value={draft.sortOrder} onChange={(value) => setDraft((current) => ({ ...current, sortOrder: value }))} type="number" min={0}/></div>
           <Input label="URL/path foto" value={draft.imagePath} onChange={(value) => setDraft((current) => ({ ...current, imagePath: value }))} placeholder="https://… atau /images/products/…"/>
+          <label className="grid gap-1.5 text-xs font-semibold text-cocoa">Unggah foto produk (JPG, PNG, WebP · maks. 5 MB)
+            <input type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => void handlePhotoUpload(event)} disabled={uploadingPhoto} className="block w-full rounded-xl border border-stroke bg-white p-2 text-xs file:mr-3 file:rounded-lg file:border-0 file:bg-cream file:px-3 file:py-2 file:text-xs file:font-bold file:text-cocoa"/>
+          </label>
+          {uploadingPhoto && <p className="text-xs text-muted">Mengunggah foto ke Firebase Storage…</p>}
+          {draft.imagePath && <div className="flex items-center gap-3 rounded-xl border border-stroke bg-white p-3"><img src={draft.imagePath} alt="Pratinjau foto produk" className="h-16 w-16 rounded-lg object-cover" /><span className="min-w-0 break-all text-[11px] text-muted">Pratinjau gambar produk</span></div>}
           <Select label="Ketersediaan" value={draft.availability} onChange={(value) => setDraft((current) => ({ ...current, availability: value as ProductDraft['availability'] }))}><option value="AVAILABLE">Tersedia</option><option value="PRE_ORDER">Pre-order</option><option value="SOLD_OUT">Habis</option></Select>
           <label className="flex items-center gap-2 text-sm text-cocoa"><input type="checkbox" checked={draft.isPublished} onChange={(event) => setDraft((current) => ({ ...current, isPublished: event.target.checked }))}/> Tampilkan di katalog</label>
           <div className="flex flex-wrap gap-2"><Button type="submit" disabled={saving || categories.length === 0}><Save size={15}/>{saving ? 'Menyimpan…' : 'Simpan produk'}</Button>{editingId && <Button tone="secondary" onClick={() => { setEditingId(''); setDraft(emptyProduct); }}>Batal</Button>}</div>
@@ -288,6 +310,74 @@ export function OwnerSettingsPage() {
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
+  const [pairingQr, setPairingQr] = useState('');
+  const [pairingChallengeId, setPairingChallengeId] = useState('');
+  const [pairingStatus, setPairingStatus] = useState('');
+  const [pairingDeviceLabel, setPairingDeviceLabel] = useState('');
+  const [devices, setDevices] = useState<OwnerDeviceRecord[]>([]);
+  useEffect(() => {
+    let active = true;
+    void listOwnerDevices().then((result) => { if (active) setDevices(result); }).catch((reason) => { if (active) setError(getErrorMessage(reason)); });
+    return () => { active = false; };
+  }, []);
+  useEffect(() => {
+    if (!pairingChallengeId) return;
+    let active = true;
+    let checking = false;
+    const timer = window.setInterval(async () => {
+      if (!active || checking) return;
+      checking = true;
+      try {
+        const result = await getOwnerPairingStatus(pairingChallengeId);
+        if (!active) return;
+        setPairingStatus(result.status);
+        setPairingDeviceLabel(result.deviceLabel);
+        if (['APPROVED', 'CONSUMED', 'REJECTED', 'EXPIRED'].includes(result.status)) {
+          window.clearInterval(timer);
+          if (result.status === 'APPROVED' || result.status === 'CONSUMED') {
+            const nextDevices = await listOwnerDevices();
+            if (active) setDevices(nextDevices);
+          }
+        }
+      } catch (reason) {
+        if (active) setError(getErrorMessage(reason));
+        window.clearInterval(timer);
+      } finally { checking = false; }
+    }, 2000);
+    return () => { active = false; window.clearInterval(timer); };
+  }, [pairingChallengeId]);
+  async function createPairing() {
+    setSaving(true); setError(''); setMessage('');
+    try {
+      const challenge = await createOwnerPairingChallenge();
+      const pairingUrl = window.location.origin + '/owner/pasangkan#challenge=' +
+        encodeURIComponent(challenge.challengeId) + '&token=' + encodeURIComponent(challenge.token);
+      setPairingQr(pairingUrl);
+      setPairingChallengeId(challenge.challengeId);
+      setPairingStatus('CREATED');
+      setPairingDeviceLabel('');
+    } catch (reason) { setError(getErrorMessage(reason)); }
+    finally { setSaving(false); }
+  }
+  async function decidePairing(approve: boolean) {
+    setSaving(true); setError(''); setMessage('');
+    try {
+      await approveOwnerPairing(pairingChallengeId, approve);
+      setPairingStatus(approve ? 'APPROVED' : 'REJECTED');
+      setMessage(approve ? 'Perangkat telah disetujui.' : 'Permintaan perangkat ditolak.');
+      if (approve) setDevices(await listOwnerDevices());
+    } catch (reason) { setError(getErrorMessage(reason)); }
+    finally { setSaving(false); }
+  }
+  async function revokeDevice(deviceId: string) {
+    setSaving(true); setError(''); setMessage('');
+    try {
+      await revokeOwnerDevice(deviceId);
+      setDevices((current) => current.map((device) => device.id === deviceId ? { ...device, status: 'REVOKED' } : device));
+      setMessage('Akses perangkat berhasil dicabut.');
+    } catch (reason) { setError(getErrorMessage(reason)); }
+    finally { setSaving(false); }
+  }
   useEffect(() => {
     if (!resource.data) return;
     setDraft({ ...emptySettings, ...resource.data.publicSettings, ...resource.data.privateSettings });
@@ -318,5 +408,36 @@ export function OwnerSettingsPage() {
       <Panel title="Data internal owner"><div className="grid gap-3"><Input label="Nama bank internal" value={draft.bankName} onChange={(value) => set('bankName', value)}/><Input label="Rekening internal" value={draft.bankAccountNumber} onChange={(value) => set('bankAccountNumber', value)}/><Input label="Nama pemilik rekening" value={draft.bankAccountHolder} onChange={(value) => set('bankAccountHolder', value)}/><Input label="Alamat titik pengambilan" value={draft.pickupAddress} onChange={(value) => set('pickupAddress', value)}/></div></Panel>
       <div className="flex items-end"><Button type="submit" disabled={saving || resource.loading}><Settings size={15}/>{saving ? 'Menyimpan…' : 'Simpan pengaturan'}</Button></div>
     </form>
+    <div className="mt-7 grid gap-5 xl:grid-cols-2">
+      <Panel title="Hubungkan perangkat Owner" description="QR memiliki masa berlaku singkat dan membutuhkan persetujuan eksplisit dari perangkat owner utama.">
+        <div className="grid gap-4 sm:grid-cols-[180px_minmax(0,1fr)] sm:items-start">
+          <div className="grid min-h-[180px] place-items-center rounded-2xl border border-stroke bg-white p-3">
+            {pairingQr ? <QRCodeSVG value={pairingQr} size={160} level="M"/> : <span className="text-xs text-muted">Belum ada QR aktif</span>}
+          </div>
+          <div>
+            <Button onClick={() => void createPairing()} disabled={saving}><ScanLine size={15}/> Buat QR pairing</Button>
+            <p className="mt-3 text-xs text-muted">Status: <strong className="text-cocoa">{pairingStatus || 'Belum dibuat'}</strong></p>
+            {pairingStatus === 'REQUESTED' && <>
+              <p className="mt-2 text-xs text-muted">Perangkat: <strong className="text-cocoa">{pairingDeviceLabel || 'Perangkat baru'}</strong></p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <Button onClick={() => void decidePairing(true)} disabled={saving}><CheckCircle2 size={14}/> Setujui</Button>
+                <Button tone="danger" onClick={() => void decidePairing(false)} disabled={saving}><XCircle size={14}/> Tolak</Button>
+              </div>
+            </>}
+            {pairingStatus === 'APPROVED' && <p className="mt-3 text-xs text-emerald-700">Perangkat disetujui. Menunggu proses koneksi selesai.</p>}
+            {pairingStatus === 'REJECTED' && <p className="mt-3 text-xs text-rose-700">Permintaan pairing ditolak.</p>}
+            {pairingStatus === 'EXPIRED' && <p className="mt-3 text-xs text-rose-700">QR pairing sudah kedaluwarsa.</p>}
+          </div>
+        </div>
+      </Panel>
+      <Panel title="Perangkat terhubung" description="Cabut akses perangkat yang tidak dikenal atau tidak lagi digunakan.">
+        {!devices.length ? <Empty>Belum ada perangkat QR pairing.</Empty> : <div className="space-y-2">
+          {devices.map((device) => <div key={device.id} className="flex items-center justify-between gap-3 rounded-xl border border-stroke bg-white p-3">
+            <div className="min-w-0"><p className="truncate text-xs font-semibold text-cocoa">{device.label}</p><p className="mt-1 text-[10px] text-muted">{device.status === 'ACTIVE' ? 'Aktif' : 'Akses dicabut'}</p></div>
+            {device.status === 'ACTIVE' && <Button tone="danger" onClick={() => void revokeDevice(device.id)} disabled={saving}><Smartphone size={14}/> Cabut akses</Button>}
+          </div>)}
+        </div>}
+      </Panel>
+    </div>
   </div>;
 }

@@ -6,6 +6,7 @@ import { CartPage } from '@/areas/storefront/pages/CartPage';
 import { CheckoutPage } from '@/areas/storefront/pages/CheckoutPage';
 import { TrackOrderPage } from '@/areas/storefront/pages/TrackOrderPage';
 import { OwnerLoginPage } from '@/areas/owner/auth/pages/OwnerLoginPage';
+import { OwnerPairingPage } from '@/areas/owner/auth/pages/OwnerPairingPage';
 import { OwnerOnlyRoute } from '@/app/guards/OwnerOnlyRoute';
 import { OwnerLayout } from '@/areas/owner/layouts/OwnerLayout';
 import { OwnerDashboardPage } from '@/areas/owner/dashboard/pages/OwnerDashboardPage';
@@ -34,6 +35,7 @@ export const router = createBrowserRouter([
     ],
   },
   { path: '/owner/login', element: <OwnerLoginPage /> },
+  { path: '/owner/pasangkan', element: <OwnerPairingPage /> },
   {
     path: '/owner',
     element: <OwnerOnlyRoute><OwnerLayout /></OwnerOnlyRoute>,
