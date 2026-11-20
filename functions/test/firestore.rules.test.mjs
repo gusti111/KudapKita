@@ -15,6 +15,8 @@ before(async () => {
     const store = context.firestore();
     await setDoc(doc(store, "userProfiles", "owner-1"), { uid: "owner-1", role: "owner", isActive: true });
     await setDoc(doc(store, "userProfiles", "inactive-owner"), { uid: "inactive-owner", role: "owner", isActive: false });
+    await setDoc(doc(store, "ownerDevices", "owner-1", "devices", "active-device"), { status: "ACTIVE" });
+    await setDoc(doc(store, "ownerDevices", "owner-1", "devices", "revoked-device"), { status: "REVOKED" });
     await setDoc(doc(store, "publicProducts", "risol"), {
       name: "Risol Mayo", slug: "risol-mayo", shortDescription: "Risol",
       categoryId: "gurih", categoryName: "Gurih", price: 2000,
@@ -107,4 +109,12 @@ test("only an active owner profile may read owner operations", async () => {
   const store = testEnv.authenticatedContext("owner-1").firestore();
   await assertFails(getDoc(doc(inactive, "inventory", "risol")));
   await assertSucceeds(getDoc(doc(store, "inventory", "risol")));
+});
+
+test("revoked paired owner devices lose Firestore access immediately", async () => {
+  const activeDevice = testEnv.authenticatedContext("owner-1", { ownerDeviceId: "active-device" }).firestore();
+  const revokedDevice = testEnv.authenticatedContext("owner-1", { ownerDeviceId: "revoked-device" }).firestore();
+  await assertSucceeds(getDoc(doc(activeDevice, "inventory", "risol")));
+  await assertFails(getDoc(doc(revokedDevice, "inventory", "risol")));
+  await assertFails(setDoc(doc(revokedDevice, "products", "forged"), { name: "Blocked" }));
 });

@@ -5,10 +5,19 @@ service firebase.storage {
       return request.auth != null;
     }
 
+    function hasActiveOwnerDevice() {
+      return !('ownerDeviceId' in request.auth.token)
+        || (
+          firestore.exists(/databases/(default)/documents/ownerDevices/$(request.auth.uid)/devices/$(request.auth.token.ownerDeviceId))
+          && firestore.get(/databases/(default)/documents/ownerDevices/$(request.auth.uid)/devices/$(request.auth.token.ownerDeviceId)).data.status == 'ACTIVE'
+        );
+    }
+
     function isActiveOwner() {
       return signedIn()
         && firestore.get(/databases/(default)/documents/userProfiles/$(request.auth.uid)).data.role == 'owner'
-        && firestore.get(/databases/(default)/documents/userProfiles/$(request.auth.uid)).data.isActive == true;
+        && firestore.get(/databases/(default)/documents/userProfiles/$(request.auth.uid)).data.isActive == true
+        && hasActiveOwnerDevice();
     }
 
     function isGuestSession() {

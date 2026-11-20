@@ -5,11 +5,20 @@ service cloud.firestore {
       return request.auth != null;
     }
 
+    function hasActiveOwnerDevice() {
+      return !('ownerDeviceId' in request.auth.token)
+        || (
+          exists(/databases/$(database)/documents/ownerDevices/$(request.auth.uid)/devices/$(request.auth.token.ownerDeviceId))
+          && get(/databases/$(database)/documents/ownerDevices/$(request.auth.uid)/devices/$(request.auth.token.ownerDeviceId)).data.status == 'ACTIVE'
+        );
+    }
+
     function isOwner() {
       return signedIn()
         && exists(/databases/$(database)/documents/userProfiles/$(request.auth.uid))
         && get(/databases/$(database)/documents/userProfiles/$(request.auth.uid)).data.role == 'owner'
-        && get(/databases/$(database)/documents/userProfiles/$(request.auth.uid)).data.isActive == true;
+        && get(/databases/$(database)/documents/userProfiles/$(request.auth.uid)).data.isActive == true
+        && hasActiveOwnerDevice();
     }
 
     function isGuestSession() {
