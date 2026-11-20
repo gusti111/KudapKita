@@ -23,5 +23,5 @@ export type OrderRecord = OrderRequestInput & {
   source: 'ONLINE';
   createdAt: unknown;
   confirmedTotal?: number | null;
-  paymentMethod?: 'BANK_TRANSFER' | 'QRIS';
+  paymentMethod?: 'CASH' | 'BANK_TRANSFER' | 'EWALLET' | 'QRIS';
 };

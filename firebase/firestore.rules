@@ -85,56 +85,39 @@ service cloud.firestore {
     }
 
     match /orders/{orderId} {
-      allow create: if isGuestSession()
-        && request.resource.data.keys().hasOnly([
-          'createdByUid', 'customerName', 'customerWhatsApp', 'fulfillmentMethod',
-          'deliveryAddress', 'customerNote', 'items', 'orderStatus', 'paymentStatus',
-          'source', 'createdAt'
-        ])
-        && request.resource.data.keys().hasAll([
-          'createdByUid', 'customerName', 'customerWhatsApp', 'fulfillmentMethod',
-          'items', 'orderStatus', 'paymentStatus', 'source', 'createdAt'
-        ])
-        && request.resource.data.createdByUid == request.auth.uid
-        && request.resource.data.customerName is string
-        && request.resource.data.customerName.size() >= 2
-        && request.resource.data.customerName.size() <= 80
-        && request.resource.data.customerWhatsApp is string
-        && request.resource.data.customerWhatsApp.size() >= 8
-        && request.resource.data.customerWhatsApp.size() <= 20
-        && request.resource.data.fulfillmentMethod in ['PICKUP', 'DELIVERY']
-        && request.resource.data.orderStatus == 'REQUESTED'
-        && request.resource.data.paymentStatus == 'UNPAID'
-        && request.resource.data.source == 'ONLINE'
-        && request.resource.data.createdAt == request.time
-        && validOrderItems(request.resource.data.items)
-        && (request.resource.data.fulfillmentMethod != 'DELIVERY'
-          || ('deliveryAddress' in request.resource.data && request.resource.data.deliveryAddress is string && request.resource.data.deliveryAddress.size() >= 5))
-        && (!('customerNote' in request.resource.data) || request.resource.data.customerNote is string);
-
       allow get: if isOwner() || (signedIn() && resource.data.createdByUid == request.auth.uid);
       allow list: if isOwner();
-      allow update, delete: if isOwner();
+      allow create, update, delete: if false;
     }
 
     match /orderPrivate/{orderId} {
-      allow read, write: if isOwner();
+      allow read: if isOwner();
+      allow write: if false;
     }
 
     match /payments/{paymentId} {
-      allow read, write: if isOwner();
+      allow read: if isOwner();
+      allow write: if false;
     }
 
     match /inventory/{productId} {
-      allow read, write: if isOwner();
+      allow read: if isOwner();
+      allow write: if false;
     }
 
     match /stockMovements/{movementId} {
-      allow read, write: if isOwner();
+      allow read: if isOwner();
+      allow write: if false;
+    }
+
+    match /productionRuns/{runId} {
+      allow read: if isOwner();
+      allow write: if false;
     }
 
     match /directSales/{saleId} {
-      allow read, write: if isOwner();
+      allow read: if isOwner();
+      allow write: if false;
     }
 
     match /privateSettings/{documentId} {
@@ -142,7 +125,8 @@ service cloud.firestore {
     }
 
     match /activityLogs/{logId} {
-      allow read, write: if isOwner();
+      allow read: if isOwner();
+      allow write: if false;
     }
 
     // Deny by default for every collection not explicitly listed above.
