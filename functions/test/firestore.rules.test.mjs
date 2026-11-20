@@ -77,6 +77,16 @@ test("owner can manage private products and a safe public projection", async () 
     categoryName: "X", price: 1000, imagePath: "", availability: "AVAILABLE",
     isPublished: true, sortOrder: 3, hpp: 700,
   }));
+  await assertFails(setDoc(doc(store, "publicProducts", "bad-price"), {
+    name: "Bad Price", slug: "bad-price", shortDescription: "", categoryId: "x",
+    categoryName: "X", price: -1, imagePath: "", availability: "AVAILABLE",
+    isPublished: true, sortOrder: 4,
+  }));
+  await assertFails(setDoc(doc(store, "publicProducts", "bad-availability"), {
+    name: "Bad Availability", slug: "bad-availability", shortDescription: "", categoryId: "x",
+    categoryName: "X", price: 1000, imagePath: "", availability: "UNKNOWN",
+    isPublished: true, sortOrder: 5,
+  }));
 });
 
 test("owner cannot write stock, production, payment, or sale records from browser", async () => {
