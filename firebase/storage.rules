@@ -11,6 +11,20 @@ service firebase.storage {
         && firestore.get(/databases/(default)/documents/userProfiles/$(request.auth.uid)).data.isActive == true;
     }
 
+    function isGuestSession() {
+      return signedIn()
+        && request.auth.token.firebase.sign_in_provider == 'anonymous';
+    }
+
+    function ownsAwaitingPaymentOrder(customerUid, orderId) {
+      let orderPath = /databases/(default)/documents/orders/$(orderId);
+      let order = firestore.get(orderPath);
+      return firestore.exists(orderPath)
+        && order.data.createdByUid == customerUid
+        && order.data.orderStatus == 'WAITING_PAYMENT'
+        && order.data.paymentStatus == 'UNPAID';
+    }
+
     // Product images are public assets. Only the active owner may manage them.
     // Payment proofs and private documents must never be stored under this public path.
     match /product-images/{ownerUid}/{fileName} {
@@ -26,8 +40,9 @@ service firebase.storage {
 
     match /payment-proofs/{customerUid}/{orderId}/{fileName} {
       allow read: if isActiveOwner();
-      allow create, update: if signedIn()
+      allow create: if isGuestSession()
         && request.auth.uid == customerUid
+        && ownsAwaitingPaymentOrder(customerUid, orderId)
         && request.resource != null
         && request.resource.size > 0
         && request.resource.size <= 5 * 1024 * 1024
@@ -35,7 +50,7 @@ service firebase.storage {
           request.resource.contentType.matches('image/(jpeg|png|webp)')
           || request.resource.contentType == 'application/pdf'
         );
-      allow delete: if false;
+      allow update, delete: if false;
     }
 
     match /{allPaths=**} {
