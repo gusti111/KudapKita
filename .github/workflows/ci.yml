@@ -24,11 +24,8 @@ jobs:
           node-version: 24.12.0
           cache: npm
 
-      - name: Refresh reproducible web lockfile
-        run: npm install --package-lock-only --include=optional --ignore-scripts --no-audit --no-fund
-
-      - name: Install web dependencies
-        run: npm ci --include=optional
+      - name: Install and refresh web dependencies
+        run: npm install --include=optional --no-audit --no-fund
 
       - name: Report npm dependency advisories
         shell: bash
@@ -53,11 +50,8 @@ jobs:
           cache: npm
           cache-dependency-path: functions/package.json
 
-      - name: Refresh reproducible Functions lockfile
-        run: npm install --prefix functions --package-lock-only --include=optional --ignore-scripts --no-audit --no-fund
-
-      - name: Install Cloud Functions dependencies
-        run: npm ci --prefix functions --include=optional
+      - name: Install and refresh Cloud Functions dependencies
+        run: npm install --prefix functions --include=optional --no-audit --no-fund
 
       - name: Enforce Functions dependency security baseline
         run: npm audit --prefix functions --audit-level=high
