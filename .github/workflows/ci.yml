@@ -20,6 +20,13 @@ jobs:
           cache: npm
       - name: Install web dependencies
         run: npm ci
+      - name: Report npm dependency advisories
+        shell: bash
+        run: |
+          npm audit --json > /tmp/kudapkita-audit.json || true
+          node -e "const r=require('/tmp/kudapkita-audit.json'); const v=Object.entries(r.vulnerabilities||{}); console.log('Full dependency audit:', JSON.stringify(v.map(([name,item])=>({name,severity:item.severity,range:item.range,fixAvailable:item.fixAvailable})),null,2)); console.log('Counts:', JSON.stringify(r.metadata?.vulnerabilities||{}));"
+          npm audit --omit=dev --json > /tmp/kudapkita-production-audit.json || true
+          node -e "const r=require('/tmp/kudapkita-production-audit.json'); const v=Object.entries(r.vulnerabilities||{}); console.log('Production dependency audit:', JSON.stringify(v.map(([name,item])=>({name,severity:item.severity,range:item.range,fixAvailable:item.fixAvailable})),null,2)); console.log('Counts:', JSON.stringify(r.metadata?.vulnerabilities||{}));"
       - name: Install Cloud Functions dependencies
         run: npm install --prefix functions --no-audit --no-fund
       - name: Type-check frontend
