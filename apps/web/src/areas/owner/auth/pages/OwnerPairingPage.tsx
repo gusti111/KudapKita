@@ -27,7 +27,8 @@ export function OwnerPairingPage() {
 
   useEffect(() => {
     if (!challengeId || !token) return;
-    if (!auth || !isFirebaseConfigured) {
+    const firebaseAuth = auth;
+    if (!firebaseAuth || !isFirebaseConfigured) {
       setStatus('ERROR');
       setMessage('QR pairing tidak lengkap atau Firebase belum dikonfigurasi.');
       return;
@@ -36,7 +37,7 @@ export function OwnerPairingPage() {
     let timer: number | undefined;
     void (async () => {
       try {
-        if (!auth.currentUser) await signInAnonymously(auth);
+        if (!firebaseAuth.currentUser) await signInAnonymously(firebaseAuth);
         const deviceLabel = (navigator.platform || 'Perangkat') + (navigator.userAgent.includes('Mobile') ? ' · Ponsel' : ' · Perangkat Owner');
         await requestOwnerPairing(challengeId, token, deviceLabel.slice(0, 80));
         if (!active) return;
@@ -59,7 +60,7 @@ export function OwnerPairingPage() {
               setMessage('Permintaan disetujui. Menyelesaikan koneksi…');
               const customToken = await consumeOwnerPairing(challengeId, token);
               if (!active) return;
-              await signInWithCustomToken(auth, customToken);
+              await signInWithCustomToken(firebaseAuth, customToken);
               if (!active) return;
               setStatus('SUCCESS');
               setMessage('Perangkat berhasil dihubungkan sebagai perangkat Owner.');

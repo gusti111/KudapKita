@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useState, type ChangeEvent, type FormEvent, type ReactNode } from 'react';
 import {
-  Archive, CheckCircle2, Factory, Plus, RefreshCw, Save, Settings,
+  Archive, CheckCircle2, Factory, Plus, RefreshCw, Save, ScanLine, Settings, Smartphone, XCircle,
 } from 'lucide-react';
+import { QRCodeSVG } from 'qrcode.react';
 import {
   archiveManagedProduct, adjustFinishedStock, createDirectSale, getStoreSettings,
   getVerifiedSalesSummary, listCategories, listManagedProducts, listRecentProductionRuns,
