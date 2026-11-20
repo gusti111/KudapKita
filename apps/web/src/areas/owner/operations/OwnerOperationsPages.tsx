@@ -7,7 +7,7 @@ import {
   getVerifiedSalesSummary, listCategories, listManagedProducts, listRecentProductionRuns,
   listStock, listStockMovements, recordProduction, saveCategory, saveManagedProduct,
   saveStoreSettings, type CategoryRecord, type DirectSaleLine, type ManagedProduct,
-  type ProductInput, type StockRecord,
+  type ProductInput,
 } from '@/data/repositories/owner-operations.repository';
 import { formatRupiah } from '@/shared/utils/format';
 import { getErrorMessage } from '@/shared/utils/errors';
