@@ -21,7 +21,7 @@ jobs:
       - name: Install web dependencies
         run: npm ci
       - name: Install Cloud Functions dependencies
-        run: npm ci --prefix functions
+        run: npm install --prefix functions --no-audit --no-fund
       - name: Type-check frontend
         run: npm run typecheck
       - name: Build production frontend

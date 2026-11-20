@@ -1,0 +1,21 @@
+{
+  "name": "kudapkita-functions",
+  "private": true,
+  "type": "module",
+  "description": "Trusted transaction, order lifecycle, and finished-goods inventory backend for KudapKita.",
+  "main": "src/index.js",
+  "engines": { "node": "22" },
+  "scripts": {
+    "test": "node --test test/domain.test.mjs",
+    "test:rules": "node --test test/firestore.rules.test.mjs",
+    "check": "node --check src/index.js && node --check src/domain.js"
+  },
+  "dependencies": {
+    "firebase-admin": "^14.5.1",
+    "firebase-functions": "^7.4.0"
+  },
+  "devDependencies": {
+    "firebase": "^13.2.0",
+    "@firebase/rules-unit-testing": "^6.0.0"
+  }
+}

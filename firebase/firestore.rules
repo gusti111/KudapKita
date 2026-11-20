@@ -70,10 +70,28 @@ service cloud.firestore {
       allow create, update, delete: if isOwner();
     }
 
+    function validPublicSettings(data) {
+      return data.keys().hasOnly([
+          'displayName', 'tagline', 'whatsappNumber', 'instagramHandle',
+          'paymentBankName', 'paymentAccountNumber', 'paymentAccountHolder',
+          'paymentEwalletName', 'paymentEwalletNumber', 'updatedAt'
+        ])
+        && (!('displayName' in data) || (data.displayName is string && data.displayName.size() <= 100))
+        && (!('tagline' in data) || (data.tagline is string && data.tagline.size() <= 180))
+        && (!('whatsappNumber' in data) || (data.whatsappNumber is string && data.whatsappNumber.size() <= 20))
+        && (!('instagramHandle' in data) || (data.instagramHandle is string && data.instagramHandle.size() <= 60))
+        && (!('paymentBankName' in data) || (data.paymentBankName is string && data.paymentBankName.size() <= 80))
+        && (!('paymentAccountNumber' in data) || (data.paymentAccountNumber is string && data.paymentAccountNumber.size() <= 40))
+        && (!('paymentAccountHolder' in data) || (data.paymentAccountHolder is string && data.paymentAccountHolder.size() <= 100))
+        && (!('paymentEwalletName' in data) || (data.paymentEwalletName is string && data.paymentEwalletName.size() <= 80))
+        && (!('paymentEwalletNumber' in data) || (data.paymentEwalletNumber is string && data.paymentEwalletNumber.size() <= 30));
+    }
+
     match /publicSettings/{documentId} {
       allow get: if true;
       allow list: if false;
-      allow create, update, delete: if isOwner();
+      allow create, update: if isOwner() && validPublicSettings(request.resource.data);
+      allow delete: if false;
     }
 
     match /products/{productId} {
