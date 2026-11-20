@@ -5,11 +5,20 @@ service cloud.firestore {
       return request.auth != null;
     }
 
+    function hasActiveOwnerDevice() {
+      return !('ownerDeviceId' in request.auth.token)
+        || (
+          exists(/databases/$(database)/documents/ownerDevices/$(request.auth.uid)/devices/$(request.auth.token.ownerDeviceId))
+          && get(/databases/$(database)/documents/ownerDevices/$(request.auth.uid)/devices/$(request.auth.token.ownerDeviceId)).data.status == 'ACTIVE'
+        );
+    }
+
     function isOwner() {
       return signedIn()
         && exists(/databases/$(database)/documents/userProfiles/$(request.auth.uid))
         && get(/databases/$(database)/documents/userProfiles/$(request.auth.uid)).data.role == 'owner'
-        && get(/databases/$(database)/documents/userProfiles/$(request.auth.uid)).data.isActive == true;
+        && get(/databases/$(database)/documents/userProfiles/$(request.auth.uid)).data.isActive == true
+        && hasActiveOwnerDevice();
     }
 
     function isGuestSession() {
@@ -60,9 +69,32 @@ service cloud.firestore {
       allow create, update, delete: if false;
     }
 
+    function validPublicProduct(data) {
+      return data.keys().hasOnly([
+          'name', 'slug', 'shortDescription', 'categoryId', 'categoryName',
+          'price', 'imagePath', 'availability', 'isPublished', 'sortOrder', 'updatedAt'
+        ])
+        && data.keys().hasAll([
+          'name', 'slug', 'shortDescription', 'categoryId', 'categoryName',
+          'price', 'imagePath', 'availability', 'isPublished', 'sortOrder'
+        ])
+        && data.name is string && data.name.size() >= 2 && data.name.size() <= 120
+        && data.slug is string && data.slug.size() >= 2 && data.slug.size() <= 140
+        && data.shortDescription is string && data.shortDescription.size() <= 500
+        && data.categoryId is string && data.categoryId.size() > 0 && data.categoryId.size() <= 128
+        && data.categoryName is string && data.categoryName.size() > 0 && data.categoryName.size() <= 100
+        && (data.price == null || (data.price is int && data.price >= 0 && data.price <= 1000000000))
+        && data.imagePath is string && data.imagePath.size() <= 2048
+        && data.availability in ['AVAILABLE', 'SOLD_OUT', 'PRE_ORDER']
+        && data.isPublished is bool
+        && data.sortOrder is int && data.sortOrder >= 0 && data.sortOrder <= 1000000
+        && (!('updatedAt' in data) || data.updatedAt is timestamp);
+    }
+
     match /publicProducts/{productId} {
       allow get, list: if isOwner() || resource.data.isPublished == true;
-      allow create, update, delete: if isOwner();
+      allow create, update: if isOwner() && validPublicProduct(request.resource.data);
+      allow delete: if isOwner();
     }
 
     match /publicCategories/{categoryId} {
@@ -70,10 +102,28 @@ service cloud.firestore {
       allow create, update, delete: if isOwner();
     }
 
+    function validPublicSettings(data) {
+      return data.keys().hasOnly([
+          'displayName', 'tagline', 'whatsappNumber', 'instagramHandle',
+          'paymentBankName', 'paymentAccountNumber', 'paymentAccountHolder',
+          'paymentEwalletName', 'paymentEwalletNumber', 'updatedAt'
+        ])
+        && (!('displayName' in data) || (data.displayName is string && data.displayName.size() <= 100))
+        && (!('tagline' in data) || (data.tagline is string && data.tagline.size() <= 180))
+        && (!('whatsappNumber' in data) || (data.whatsappNumber is string && data.whatsappNumber.size() <= 20))
+        && (!('instagramHandle' in data) || (data.instagramHandle is string && data.instagramHandle.size() <= 60))
+        && (!('paymentBankName' in data) || (data.paymentBankName is string && data.paymentBankName.size() <= 80))
+        && (!('paymentAccountNumber' in data) || (data.paymentAccountNumber is string && data.paymentAccountNumber.size() <= 40))
+        && (!('paymentAccountHolder' in data) || (data.paymentAccountHolder is string && data.paymentAccountHolder.size() <= 100))
+        && (!('paymentEwalletName' in data) || (data.paymentEwalletName is string && data.paymentEwalletName.size() <= 80))
+        && (!('paymentEwalletNumber' in data) || (data.paymentEwalletNumber is string && data.paymentEwalletNumber.size() <= 30));
+    }
+
     match /publicSettings/{documentId} {
       allow get: if true;
       allow list: if false;
-      allow create, update, delete: if isOwner();
+      allow create, update: if isOwner() && validPublicSettings(request.resource.data);
+      allow delete: if false;
     }
 
     match /products/{productId} {
@@ -85,56 +135,39 @@ service cloud.firestore {
     }
 
     match /orders/{orderId} {
-      allow create: if isGuestSession()
-        && request.resource.data.keys().hasOnly([
-          'createdByUid', 'customerName', 'customerWhatsApp', 'fulfillmentMethod',
-          'deliveryAddress', 'customerNote', 'items', 'orderStatus', 'paymentStatus',
-          'source', 'createdAt'
-        ])
-        && request.resource.data.keys().hasAll([
-          'createdByUid', 'customerName', 'customerWhatsApp', 'fulfillmentMethod',
-          'items', 'orderStatus', 'paymentStatus', 'source', 'createdAt'
-        ])
-        && request.resource.data.createdByUid == request.auth.uid
-        && request.resource.data.customerName is string
-        && request.resource.data.customerName.size() >= 2
-        && request.resource.data.customerName.size() <= 80
-        && request.resource.data.customerWhatsApp is string
-        && request.resource.data.customerWhatsApp.size() >= 8
-        && request.resource.data.customerWhatsApp.size() <= 20
-        && request.resource.data.fulfillmentMethod in ['PICKUP', 'DELIVERY']
-        && request.resource.data.orderStatus == 'REQUESTED'
-        && request.resource.data.paymentStatus == 'UNPAID'
-        && request.resource.data.source == 'ONLINE'
-        && request.resource.data.createdAt == request.time
-        && validOrderItems(request.resource.data.items)
-        && (request.resource.data.fulfillmentMethod != 'DELIVERY'
-          || ('deliveryAddress' in request.resource.data && request.resource.data.deliveryAddress is string && request.resource.data.deliveryAddress.size() >= 5))
-        && (!('customerNote' in request.resource.data) || request.resource.data.customerNote is string);
-
       allow get: if isOwner() || (signedIn() && resource.data.createdByUid == request.auth.uid);
       allow list: if isOwner();
-      allow update, delete: if isOwner();
+      allow create, update, delete: if false;
     }
 
     match /orderPrivate/{orderId} {
-      allow read, write: if isOwner();
+      allow read: if isOwner();
+      allow write: if false;
     }
 
     match /payments/{paymentId} {
-      allow read, write: if isOwner();
+      allow read: if isOwner();
+      allow write: if false;
     }
 
     match /inventory/{productId} {
-      allow read, write: if isOwner();
+      allow read: if isOwner();
+      allow write: if false;
     }
 
     match /stockMovements/{movementId} {
-      allow read, write: if isOwner();
+      allow read: if isOwner();
+      allow write: if false;
+    }
+
+    match /productionRuns/{runId} {
+      allow read: if isOwner();
+      allow write: if false;
     }
 
     match /directSales/{saleId} {
-      allow read, write: if isOwner();
+      allow read: if isOwner();
+      allow write: if false;
     }
 
     match /privateSettings/{documentId} {
@@ -142,7 +175,8 @@ service cloud.firestore {
     }
 
     match /activityLogs/{logId} {
-      allow read, write: if isOwner();
+      allow read: if isOwner();
+      allow write: if false;
     }
 
     // Deny by default for every collection not explicitly listed above.
