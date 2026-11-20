@@ -20,28 +20,52 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(isFirebaseConfigured);
 
   useEffect(() => {
-    if (!auth || !db) {
+    // Capture the guarded instances before entering the auth callback. This keeps
+    // the nullable Firebase exports narrowed for asynchronous work.
+    const firebaseAuth = auth;
+    const firestore = db;
+    if (!firebaseAuth || !firestore) {
       setLoading(false);
       return;
     }
 
-    return onAuthStateChanged(auth, async (user) => {
+    let active = true;
+    let revision = 0;
+
+    const unsubscribe = onAuthStateChanged(firebaseAuth, (user) => {
+      const requestRevision = ++revision;
+      if (!active) return;
+
       setLoading(true);
       setCurrentUser(user);
       setProfile(null);
+
       if (!user || user.isAnonymous) {
         setLoading(false);
         return;
       }
-      try {
-        const snapshot = await getDoc(doc(db, 'userProfiles', user.uid));
-        if (snapshot.exists()) setProfile(snapshot.data() as UserProfile);
-      } catch (error) {
-        console.error('Unable to load user profile:', error);
-      } finally {
-        setLoading(false);
-      }
+
+      void (async () => {
+        try {
+          const snapshot = await getDoc(doc(firestore, 'userProfiles', user.uid));
+          if (active && requestRevision === revision) {
+            setProfile(snapshot.exists() ? snapshot.data() as UserProfile : null);
+          }
+        } catch (error) {
+          if (active && requestRevision === revision) {
+            console.error('Unable to load user profile:', error);
+          }
+        } finally {
+          if (active && requestRevision === revision) setLoading(false);
+        }
+      })();
     });
+
+    return () => {
+      active = false;
+      revision += 1;
+      unsubscribe();
+    };
   }, []);
 
   const value = useMemo<AuthContextValue>(() => ({

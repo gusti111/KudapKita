@@ -1,0 +1,69 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function hasActiveOwnerDevice() {
+      return !('ownerDeviceId' in request.auth.token)
+        || (
+          firestore.exists(/databases/(default)/documents/ownerDevices/$(request.auth.uid)/devices/$(request.auth.token.ownerDeviceId))
+          && firestore.get(/databases/(default)/documents/ownerDevices/$(request.auth.uid)/devices/$(request.auth.token.ownerDeviceId)).data.status == 'ACTIVE'
+        );
+    }
+
+    function isActiveOwner() {
+      return signedIn()
+        && firestore.get(/databases/(default)/documents/userProfiles/$(request.auth.uid)).data.role == 'owner'
+        && firestore.get(/databases/(default)/documents/userProfiles/$(request.auth.uid)).data.isActive == true
+        && hasActiveOwnerDevice();
+    }
+
+    function isGuestSession() {
+      return signedIn()
+        && request.auth.token.firebase.sign_in_provider == 'anonymous';
+    }
+
+    function ownsAwaitingPaymentOrder(customerUid, orderId) {
+      let orderPath = /databases/(default)/documents/orders/$(orderId);
+      let order = firestore.get(orderPath);
+      return firestore.exists(orderPath)
+        && order.data.createdByUid == customerUid
+        && order.data.orderStatus == 'WAITING_PAYMENT'
+        && order.data.paymentStatus == 'UNPAID';
+    }
+
+    // Product images are public assets. Only the active owner may manage them.
+    // Payment proofs and private documents must never be stored under this public path.
+    match /product-images/{ownerUid}/{fileName} {
+      allow read: if true;
+      allow create, update: if isActiveOwner()
+        && request.auth.uid == ownerUid
+        && request.resource != null
+        && request.resource.size > 0
+        && request.resource.size <= 5 * 1024 * 1024
+        && request.resource.contentType.matches('image/(jpeg|png|webp)');
+      allow delete: if isActiveOwner() && request.auth.uid == ownerUid;
+    }
+
+    match /payment-proofs/{customerUid}/{orderId}/{fileName} {
+      allow read: if isActiveOwner();
+      allow create: if isGuestSession()
+        && request.auth.uid == customerUid
+        && ownsAwaitingPaymentOrder(customerUid, orderId)
+        && request.resource != null
+        && request.resource.size > 0
+        && request.resource.size <= 5 * 1024 * 1024
+        && (
+          request.resource.contentType.matches('image/(jpeg|png|webp)')
+          || request.resource.contentType == 'application/pdf'
+        );
+      allow update, delete: if false;
+    }
+
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

@@ -8,6 +8,7 @@ export type PublicProduct = {
   categoryName: string;
   price: number | null;
   imagePath?: string;
+  imageGallery?: string[];
   availability: ProductAvailability;
   isPublished: boolean;
   sortOrder: number;

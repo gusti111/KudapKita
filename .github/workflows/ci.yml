@@ -1,18 +1,97 @@
 name: CI
+
 on:
   push:
     branches: [main]
   pull_request:
     branches: [main]
+
+permissions:
+  contents: write
+
 jobs:
   validate:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
+          ref: ${{ github.event.pull_request.head.ref || github.ref_name }}
+          persist-credentials: true
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24.12.0
+          cache: npm
+
+      - name: Install and refresh web dependencies
+        run: npm install --include=optional --no-audit --no-fund
+
+      - name: Report npm dependency advisories
+        shell: bash
+        run: |
+          npm audit --json > /tmp/kudapkita-audit.json || true
+          node -e "const r=require('/tmp/kudapkita-audit.json'); const v=Object.entries(r.vulnerabilities||{}); console.log('Full dependency audit:', JSON.stringify(v.map(([name,item])=>({name,severity:item.severity,range:item.range,fixAvailable:item.fixAvailable,via:item.via?.map(v=>typeof v==='string'?v:{title:v.title,url:v.url,range:v.range})})),null,2)); console.log('Counts:', JSON.stringify(r.metadata?.vulnerabilities||{}));"
+          npm audit --omit=dev --json > /tmp/kudapkita-production-audit.json || true
+          node -e "const r=require('/tmp/kudapkita-production-audit.json'); const v=Object.entries(r.vulnerabilities||{}); console.log('Production dependency audit:', JSON.stringify(v.map(([name,item])=>({name,severity:item.severity,range:item.range,fixAvailable:item.fixAvailable})),null,2)); console.log('Counts:', JSON.stringify(r.metadata?.vulnerabilities||{}));"
+
+      - name: Enforce web dependency security baseline
+        run: npm audit --audit-level=high
+
+      - name: Type-check frontend
+        run: npm run typecheck
+
+      - name: Build production frontend
+        run: npm run build
+
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
-      - run: npm install
-      - run: npm run typecheck
-      - run: npm run build
+          cache-dependency-path: functions/package.json
+
+      - name: Install and refresh Cloud Functions dependencies
+        run: npm install --prefix functions --include=optional --no-audit --no-fund
+
+      - name: Enforce Functions dependency security baseline
+        run: npm audit --prefix functions --audit-level=high
+
+      - name: Check Cloud Functions syntax
+        run: npm run check:functions
+
+      - name: Test Cloud Functions domain logic
+        run: npm run test:functions
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Test Firestore security rules in emulator
+        run: npx --yes firebase-tools@latest emulators:exec --only firestore --project demo-kudapkita-rules "npm run test:rules --prefix functions"
+
+      - name: Commit refreshed dependency lockfiles
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+        env:
+          BRANCH_NAME: ${{ github.event.pull_request.head.ref }}
+        run: |
+          git add package-lock.json functions/package-lock.json
+          if git diff --cached --quiet; then
+            echo "Dependency lockfiles are already current."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "chore: refresh Firebase and gRPC dependency lockfiles"
+          git push origin "HEAD:${BRANCH_NAME}"
+
+      - name: Package verified project overlay
+        run: git archive --format=zip HEAD > kudapkita-platform-overlay.zip
+
+      - name: Upload project overlay
+        uses: actions/upload-artifact@v4
+        with:
+          name: kudapkita-platform-overlay
+          path: kudapkita-platform-overlay.zip
+          if-no-files-found: error
+          retention-days: 7

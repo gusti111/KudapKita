@@ -1,0 +1,11 @@
+CATATAN PENGGUNAAN KUDAPKITA PLATFORM
+
+1. Aplikasi aktif memakai React, TypeScript, Vite, Firebase Authentication, Firestore, Storage, dan Callable Cloud Functions. Ikuti README.md di root untuk instalasi dan pengujian.
+2. Harga, HPP, stok, nomor WhatsApp, rekening, alamat, jam layanan, dan kebijakan operasional wajib dikonfirmasi owner. Jangan menganggap ilustrasi atau nilai panduan sebagai fakta final.
+3. Katalog starter menyediakan enam menu utama: Doko-Doko Bugis, Risol Kentang Bengkuang, Risol Mayo, Onde-onde, Dadar Gulung, dan Apam. Harga starter sengaja kosong sampai owner menetapkannya.
+4. Checkout adalah permintaan pesanan. Admin tetap memeriksa ketersediaan, jadwal, total final, dan ongkir sebelum meminta pembayaran.
+5. Pembayaran diverifikasi manual oleh owner. Payment gateway dan upload bukti transfer di aplikasi belum tersedia.
+6. Ongkir otomatis belum diaktifkan. Pasar Bahagia dan Kisaran Kuala Dua merupakan zona gratis yang direncanakan, tetapi pin toko, batas poligon, tarif, dan pengujian rute harus disetujui owner lebih dahulu.
+7. Gambar katalog yang disertakan adalah ilustrasi AI, bukan dokumentasi batch produksi. Ganti dengan foto asli yang disetujui owner sebelum peluncuran komersial.
+8. Informasi bahan, komposisi, dan alergen perlu dicocokkan dengan resep aktual sebelum dipublikasikan.
+9. Security Rules menerapkan prinsip deny-by-default. Perubahan transaksi, stok, dan pembayaran harus melalui callable backend.

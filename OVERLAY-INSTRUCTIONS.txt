@@ -1,0 +1,55 @@
+KUDAPKITA — PREMIUM EXPERIENCE OVERLAY
+======================================
+
+This archive contains the complete tracked source/configuration tree for the upgraded KudapKita project. Extract it into the root of the existing project — the same folder that contains package.json.
+
+SAFE REPLACEMENT
+1. Stop the Vite development server and close editor tasks that may write project files.
+2. Make a full backup/copy of the current KudapKita folder.
+3. Extract this ZIP directly into the existing project root and allow files to merge/replace by relative path.
+4. KEEP the current .env.local file. It is intentionally excluded because it contains project-specific Firebase configuration.
+5. KEEP the current .firebaserc file. It is intentionally excluded because it selects your Firebase project.
+6. KEEP the existing .git directory and Git history. It is intentionally excluded from this overlay.
+
+REQUIRED RUNTIME
+- Node.js 24.12.0 or newer (the project engine requirement is >=24.12.0).
+- npm compatible with the installed Node.js version.
+
+After extraction, open a terminal at the project root and run:
+
+  node --version
+  npm install --include=optional --no-audit --no-fund
+  npm install --prefix functions --include=optional --no-audit --no-fund
+
+VALIDATION
+Run from the project root:
+
+  npm run typecheck
+  npm run build
+  npm run check:functions
+  npm run test:functions
+
+Firestore Rules tests are located in functions/test/firestore.rules.test.mjs. Run them with the Firestore Emulator available:
+
+  npm --prefix functions run test:rules
+
+PRODUCT PHOTOS
+- The homepage hero uses an editorial inspiration visual. It is not a photograph of current stock or a promise that every pictured snack is available.
+- Actual product photos should be uploaded by the owner from Owner Workspace → Products.
+- Each product supports up to five gallery images. Choose the primary image, then save the product.
+- Uploaded images are optimized to WebP when the browser supports it and the optimized result is smaller. JPG, PNG, and WebP input are supported, up to 5 MB per source file.
+- Removing a previously saved gallery image and saving the product attempts to remove that project's corresponding Storage object. External image URLs are not deleted.
+
+FIREBASE / SECURITY
+- Review .firebaserc and confirm the intended Firebase project before any deployment.
+- Review .env.local and confirm the Vite Firebase configuration, including VITE_FIREBASE_STORAGE_BUCKET for product photo upload.
+- Enable Firebase Anonymous Authentication for guest checkout.
+- Confirm owner userProfiles, ownerDevices, Firestore Rules, Storage Rules, indexes, and Functions configuration.
+- Owner mobile pairing QR tokens are short-lived (2 minutes), single-use, and require approval from an authenticated owner session.
+- Payment revenue is counted only after the backend records a VERIFIED payment. A transfer screenshot or customer claim is not treated as payment confirmation.
+
+IMPORTANT
+- This archive is a source/configuration overlay, not a backup of your environment.
+- It excludes .git, node_modules, functions/node_modules, dist, build output, .firebase emulator state, .env.local, .firebaserc, local backups, service-account files, and private credentials.
+- No Firebase production deployment is performed by extracting this ZIP.
+- Review the Firebase project and production data before deploying Firestore Rules, Storage Rules, Cloud Functions, or Hosting.

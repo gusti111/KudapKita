@@ -3,4 +3,6 @@ export type CartLine = {
   productName: string;
   quantity: number;
   displayedUnitPrice: number | null;
+  imagePath?: string;
+  categoryName?: string;
 };
