@@ -84,3 +84,14 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git commit -m "chore: refresh Firebase and gRPC dependency lockfiles"
           git push origin "HEAD:${BRANCH_NAME}"
+
+      - name: Package verified project overlay
+        run: git archive --format=zip HEAD > kudapkita-platform-overlay.zip
+
+      - name: Upload project overlay
+        uses: actions/upload-artifact@v4
+        with:
+          name: kudapkita-platform-overlay
+          path: kudapkita-platform-overlay.zip
+          if-no-files-found: error
+          retention-days: 7

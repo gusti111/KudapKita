@@ -1,0 +1,40 @@
+KUDAPKITA — PROJECT OVERLAY INSTRUCTIONS
+======================================
+
+This archive is prepared to overlay an existing KudapKita project directory.
+
+SAFE REPLACEMENT
+1. Stop the Vite development server and close any editor task that is writing files.
+2. Make a backup or copy of your current KudapKita project folder.
+3. Extract this ZIP directly into the existing project folder — the folder that already contains package.json.
+4. Keep the existing .env.local file. It is intentionally not included in this archive because it contains machine/project-specific Firebase configuration.
+5. Keep your existing .git directory. It is intentionally not included in this archive.
+6. Allow the extractor to merge folders and replace files with matching paths.
+
+DEPENDENCIES
+After extraction, open a terminal at the project root and run:
+
+  npm install
+
+Then install Cloud Functions dependencies:
+
+  npm install --prefix functions
+
+VALIDATION
+Run these checks from the project root:
+
+  npm run typecheck
+  npm run build
+  npm run check:functions
+  npm run test:functions
+
+FIREBASE
+- Review .firebaserc and confirm that it points to the intended Firebase project.
+- Review .env.local and make sure it contains the correct Vite Firebase values, including VITE_FIREBASE_STORAGE_BUCKET when product image uploads are required.
+- Enable Anonymous Authentication for guest checkout and ensure the owner profile/device documents match the Firestore Rules.
+- Confirm the Firebase Storage bucket and required indexes are configured.
+- Do not deploy Firestore Rules, Storage Rules, Cloud Functions, or Hosting until the target Firebase project and current production data have been reviewed.
+- This archive does not deploy anything and does not include service-account credentials.
+
+IMPORTANT
+This is a source/configuration overlay, not a backup of your environment. It excludes .git, node_modules, functions/node_modules, dist, .firebase, local environment files, and local backups. Do not delete your existing .env.local or Git history.
